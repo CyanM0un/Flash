@@ -114,4 +114,8 @@ public class Edge<CallSite, Method> {
         return ContrUtil.string2Int(csContr);
     }
 
+    public List<String> getCSContr() {
+        return csContr;
+    }
+
 }

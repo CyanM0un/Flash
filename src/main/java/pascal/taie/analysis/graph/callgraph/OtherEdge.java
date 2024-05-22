@@ -33,7 +33,7 @@ public abstract class OtherEdge<CallSite, Method>
         extends Edge<CallSite, Method> {
 
     protected OtherEdge(CallSite callSite, Method callee) {
-        super(CallKind.OTHER, callSite, callee, null);
+        super(CallKind.OTHER, callSite, callee, null, null);
     }
 
     /**

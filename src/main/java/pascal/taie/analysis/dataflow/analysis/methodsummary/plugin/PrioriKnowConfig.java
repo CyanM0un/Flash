@@ -11,7 +11,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import pascal.taie.World;
 import pascal.taie.analysis.dataflow.analysis.methodsummary.Utils.ContrUtil;
 import pascal.taie.config.ConfigException;
 import pascal.taie.language.classes.ClassHierarchy;
@@ -171,6 +170,7 @@ public record PrioriKnowConfig(List<JMethod> sinks,
                     String methodSig = elem.get("method").asText();
                     JMethod method = hierarchy.getMethod(methodSig);
                     if (method != null) {
+                        imitates.add(method);
                         JsonNode action = elem.get("action");
                         switch (action.asText()) {
                             case "connect" -> {

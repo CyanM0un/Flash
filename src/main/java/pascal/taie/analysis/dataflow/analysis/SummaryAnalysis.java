@@ -5,6 +5,7 @@ import pascal.taie.analysis.dataflow.analysis.methodsummary.ContrFact;
 import pascal.taie.analysis.dataflow.analysis.methodsummary.StackManger;
 import pascal.taie.analysis.dataflow.analysis.methodsummary.StmtProcessor;
 import pascal.taie.analysis.dataflow.analysis.methodsummary.Utils.ContrUtil;
+import pascal.taie.analysis.graph.callgraph.Edge;
 import pascal.taie.analysis.graph.cfg.CFG;
 import pascal.taie.analysis.graph.flowgraph.FlowKind;
 import pascal.taie.analysis.pta.core.cs.CSCallGraph;
@@ -18,8 +19,12 @@ import pascal.taie.analysis.pta.core.heap.Obj;
 import pascal.taie.analysis.pta.core.solver.PointerFlowGraph;
 import pascal.taie.ir.exp.Var;
 import pascal.taie.ir.stmt.Stmt;
+import pascal.taie.language.classes.JMethod;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class SummaryAnalysis extends AbstractDataflowAnalysis<Stmt, ContrFact> {
 
@@ -31,11 +36,14 @@ public class SummaryAnalysis extends AbstractDataflowAnalysis<Stmt, ContrFact> {
 
     private HeapModel heapModel;
 
+    private CSCallGraph csCallGraph;
+
     public SummaryAnalysis(CFG<Stmt> body, StackManger stackManger, CSManager csManager, HeapModel heapModel, Context context, PointerFlowGraph pointerFlowGraph, CSCallGraph csCallGraph) {
         super(body);
         this.csManager = csManager;
         this.heapModel = heapModel;
         this.context = context;
+        this.csCallGraph = csCallGraph;
         this.stmtProcessor = new StmtProcessor(stackManger, csCallGraph, pointerFlowGraph, heapModel, csManager, context);
     }
 
@@ -45,18 +53,23 @@ public class SummaryAnalysis extends AbstractDataflowAnalysis<Stmt, ContrFact> {
     }
 
     @Override
-    public ContrFact newBoundaryFact() { // 对于非可控值做一个传递，可以减少误报
+    public ContrFact newBoundaryFact() { // 直接根据第一次的分析结果初始化参数可控性
+        JMethod curMethod = cfg.getIR().getMethod();
+        List<String> csContr = new ArrayList<>();
+        csCallGraph.edgesInTo(csManager.getCSMethod(context, curMethod)).forEach(edge -> csContr.addAll(edge.getCSContr()));
         List<Var> params = cfg.getIR().getParams();
         for (int i = 0; i < params.size(); i++) {
             CSVar param = csManager.getCSVar(context, params.get(i));
-            CSObj csContrParam = ContrUtil.getObj(param, ContrUtil.int2String(i), heapModel, context, csManager);
+            String paramValue = (csContr.isEmpty() || ContrUtil.isControllable(csContr.get(i + 1))) ? ContrUtil.int2String(i) : csContr.get(i + 1);
+            CSObj csContrParam = ContrUtil.getObj(param, paramValue, heapModel, context, csManager);
             stmtProcessor.addPFGEdge(csContrParam, param, FlowKind.NEW_CONTR, cfg.getEntry().getLineNumber());
         }
         Var thisVar = cfg.getIR().getThis();
         if (thisVar != null) {
             CSVar csThisVar = csManager.getCSVar(context, thisVar);
             stmtProcessor.setThis(csThisVar);
-            CSObj csContrThis = ContrUtil.getObj(csThisVar, ContrUtil.sTHIS, heapModel, context, csManager);
+            String thisValue = (csContr.isEmpty() || ContrUtil.isControllable(csContr.get(0))) ? ContrUtil.sTHIS : csContr.get(0);
+            CSObj csContrThis = ContrUtil.getObj(csThisVar, thisValue, heapModel, context, csManager);
             stmtProcessor.addPFGEdge(csContrThis, csThisVar, FlowKind.NEW_CONTR, cfg.getEntry().getLineNumber());
         }
         return newInitialFact();
@@ -64,7 +77,7 @@ public class SummaryAnalysis extends AbstractDataflowAnalysis<Stmt, ContrFact> {
 
     @Override
     public ContrFact newInitialFact() {
-        return newInitialFact();
+        return new ContrFact();
     }
 
     @Override
