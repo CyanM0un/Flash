@@ -44,7 +44,7 @@ public class SootClassLoader implements JClassLoader {
 
     private final Map<String, JClass> classes = Maps.newMap(1024);
 
-    private String entry;
+    private List<String> sources;
 
     public static Set<String> readSubSigList = Set.of(
             "void readObject(java.io.ObjectInputStream)",
@@ -54,11 +54,11 @@ public class SootClassLoader implements JClassLoader {
 
     private static String invokeSubSig = "java.lang.Object invoke(java.lang.Object,java.lang.reflect.Method,java.lang.Object[])";
 
-    SootClassLoader(Scene scene, ClassHierarchy hierarchy, boolean allowPhantom, String entry) {
+    SootClassLoader(Scene scene, ClassHierarchy hierarchy, boolean allowPhantom, List<String> sources) {
         this.scene = scene;
         this.hierarchy = hierarchy;
         this.allowPhantom = allowPhantom;
-        this.entry = entry;
+        this.sources = sources;
     }
 
     @Override
@@ -82,8 +82,8 @@ public class SootClassLoader implements JClassLoader {
                 if (isSerImpl) jclass.setSerializable();
                 boolean isInvokeImpl = sootClass.implementsInterface("java.lang.reflect.InvocationHandler");
                 jclass.getDeclaredMethods().forEach(m -> {
-                    if (m.getSignature().equals(entry) ||
-                            (entry.equals("serializable") && readSubSigList.contains(m.getSubsignature().toString()) && isSerImpl)) {
+                    if (sources.contains(m.getSignature()) ||
+                            (sources.contains("serializable") && readSubSigList.contains(m.getSubsignature().toString()) && isSerImpl)) {
                         World.get().addGCEntry(m);
                     } else if (m.getSubsignature().toString().equals(invokeSubSig) && isInvokeImpl) {
                         World.get().addInvocationHandlerMethod(m);

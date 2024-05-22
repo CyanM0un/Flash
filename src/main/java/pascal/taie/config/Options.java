@@ -255,12 +255,12 @@ public class Options implements Serializable {
     }
 
     @JsonProperty
-    @Option(names = {"-e", "--entry"},
-            description = "Deserialization Entry")
-    private String entry;
+    @Option(names = {"-s", "--sources"},
+            description = "Deserialization Sources")
+    private List<String> sources;
 
-    public String getEntry() {
-        return entry;
+    public List<String> getSources() {
+        return sources;
     }
 
     @JsonProperty
@@ -529,7 +529,7 @@ public class Options implements Serializable {
                 ", scope=" + scope +
                 ", nativeModel=" + nativeModel +
                 ", planFile=" + planFile +
-                ", entry=" + entry +
+                ", sources=" + sources +
                 ", filterNonSerializable" + filterNonSerializable +
                 ", analyses=" + analyses +
                 ", onlyGenPlan=" + onlyGenPlan +

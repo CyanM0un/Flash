@@ -164,7 +164,7 @@ public class SootWorldBuilder extends AbstractWorldBuilder {
         // initialize class hierarchy
         ClassHierarchy hierarchy = new ClassHierarchyImpl();
         SootClassLoader loader = new SootClassLoader(
-                scene, hierarchy, options.isAllowPhantom(), options.getEntry());
+                scene, hierarchy, options.isAllowPhantom(), options.getSources());
         hierarchy.setDefaultClassLoader(loader);
         hierarchy.setBootstrapClassLoader(loader);
         world.setClassHierarchy(hierarchy);

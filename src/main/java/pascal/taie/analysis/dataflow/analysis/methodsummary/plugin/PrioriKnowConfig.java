@@ -32,13 +32,14 @@ import java.util.List;
 
 import static pascal.taie.analysis.dataflow.analysis.methodsummary.plugin.IndexRef.ARRAY_SUFFIX;
 
-public record PrioriKnowConfig(List<JMethod> sources,
-                               List<JMethod> sinks,
+public record PrioriKnowConfig(List<JMethod> sinks,
                                List<JMethod> transfers,
                                List<JMethod> ignores,
-                               List<JMethod> imitates) {
+                               List<Object> imitates) {
 
     private static final Logger logger = LogManager.getLogger(PrioriKnowConfig.class);
+
+    private static List<String> idxList = List.of("fromIdx", "recIdx", "paramIdx");
 
     public static PrioriKnowConfig loadConfig(String path, ClassHierarchy hierarchy, TypeSystem typeSystem) {
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
@@ -61,11 +62,6 @@ public record PrioriKnowConfig(List<JMethod> sources,
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder("Priori-Know-Config:");
-        if (!sources.isEmpty()) {
-            sb.append("\nsources:\n");
-            sources.forEach(source ->
-                    sb.append("  ").append(source == null ? "Serializable" : source).append("\n"));
-        }
         if (!sinks.isEmpty()) {
             sb.append("\nsinks:\n");
             sinks.forEach(sink ->
@@ -104,36 +100,11 @@ public record PrioriKnowConfig(List<JMethod> sources,
         public PrioriKnowConfig deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
             ObjectCodec oc = p.getCodec();
             JsonNode node = oc.readTree(p);
-            List<JMethod> sources = deserializeSources(node.get("sources"));
             List<JMethod> sinks = deserializeSinks(node.get("sinks"));
             List<JMethod> transfers = deserializeTransfers(node.get("transfers"));
             List<JMethod> imitates = deserializeImitates(node.get("imitates"));
-            List<JMethod> ignores = deserializeIgnores(node.get("ignores"));
-            return new PrioriKnowConfig(sources, sinks, transfers, imitates, ignores);
-        }
-
-        private List<JMethod> deserializeSources(JsonNode node) {
-            if (node instanceof ArrayNode arrayNode) {
-                List<JMethod> sources = new ArrayList<>(arrayNode.size());
-                for (JsonNode elem : arrayNode) {
-                    String methodSig = elem.get("method").asText();
-                    if (methodSig.equals("Serializable")) {
-                        World.get().getGCEntries().forEach(m -> m.setSource());
-                        sources.add(null);
-                    } else {
-                        JMethod method = hierarchy.getMethod(methodSig);
-                        if (method != null) {
-                            method.setSource();
-                            sources.add(method);
-                        } else {
-                            logger.warn("Cannot find source method '{}'", methodSig);
-                        }
-                    }
-                }
-                return Collections.unmodifiableList(sources);
-            } else {
-                return List.of();
-            }
+            List<Object> ignores = deserializeIgnores(node.get("ignores"));
+            return new PrioriKnowConfig(sinks, transfers, imitates, ignores);
         }
 
         private List<JMethod> deserializeSinks(JsonNode node) {
@@ -202,14 +173,32 @@ public record PrioriKnowConfig(List<JMethod> sources,
                     if (method != null) {
                         JsonNode action = elem.get("action");
                         switch (action.asText()) {
-                            case "connect" -> method.setImitatedBehavior("jump", elem.get("jump").asText());
-                            case "summary" -> {
-                                ArrayNode append = (ArrayNode) elem.get("append");
-                                if (append != null) {
-                                    String value = ContrUtil.int2String(InvokeUtils.toInt(append.get(0).asText()));
-                                    String key = ContrUtil.int2String(InvokeUtils.toInt(append.get(1).asText()));
-                                    method.setSummary(key, value);
+                            case "connect" -> {
+                                String target = elem.get("jump").asText();
+                                method.setImitatedBehavior("jump", target);
+                                for (String idx : idxList) {
+                                    JsonNode idxNode = elem.get(idx);
+                                    if (idxNode != null) {
+                                        String idxValue = Integer.toString(InvokeUtils.toInt(elem.get(idx).asText()));
+                                        method.setImitatedBehavior(idx, idxValue);
+                                    }
                                 }
+                            }
+                            case "polluteRec" -> method.setImitatedBehavior("polluteRec", "");
+                            case "summary" -> {
+                                ArrayNode summaryValue = (ArrayNode) elem.get("value");
+                                summaryValue.forEach(value -> {
+                                    String[] v = value.asText().split("->");
+                                    String from = ContrUtil.int2String(InvokeUtils.toInt(v[0]));
+                                    String to;
+                                    if (v[1].equals("result")) {
+                                        to = "return";
+                                        from = from + "+null";
+                                    } else {
+                                        to =ContrUtil.int2String(InvokeUtils.toInt(v[1]));
+                                    }
+                                    method.setSummary(to, from);
+                                });
                             }
                         }
                     } else {
@@ -222,9 +211,9 @@ public record PrioriKnowConfig(List<JMethod> sources,
             }
         }
 
-        private List<JMethod> deserializeIgnores(JsonNode node) {
+        private List<Object> deserializeIgnores(JsonNode node) {
             if (node instanceof ArrayNode arrayNode) {
-                List<JMethod> ignores = new ArrayList<>(arrayNode.size());
+                List<Object> ignores = new ArrayList<>(arrayNode.size());
                 for (JsonNode elem : arrayNode) {
                     JsonNode ignoredNode = elem.get("method");
                     if (ignoredNode != null) {
@@ -239,8 +228,12 @@ public record PrioriKnowConfig(List<JMethod> sources,
                     } else {
                         String classSig = elem.get("class").asText();
                         JClass jClass = hierarchy.getClass(classSig);
-                        if (jClass != null) jClass.setIgnored();
-                        else logger.warn("Cannot find ignored class '{}'", classSig);
+                        if (jClass != null) {
+                            jClass.setIgnored();
+                            ignores.add(jClass);
+                        } else {
+                            logger.warn("Cannot find ignored class '{}'", classSig);
+                        }
                     }
                 }
                 return Collections.unmodifiableList(ignores);

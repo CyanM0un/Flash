@@ -141,7 +141,7 @@ public class Main {
                         World.get()
                                 .allMethods()
                                 .count());
-                setSerializable(options.getEntry());
+                setSerializable(options.getSources());
             } catch (InstantiationException | IllegalAccessException |
                     NoSuchMethodException | InvocationTargetException e) {
                 System.err.println("Failed to build world due to " + e);
@@ -150,20 +150,20 @@ public class Main {
         }, "WorldBuilder");
     }
 
-    private static void setSerializable(String entry) {
+    private static void setSerializable(List<String> sources) {
         World.get().getClassHierarchy().allClasses()
                 .filter(JClass::isSerializable)
                 .forEach(c -> {
-                    setSubSerializable(c, entry);
+                    setSubSerializable(c, sources);
                     setSuperSerializable(c);
                 });
     }
 
-    private static void setSubSerializable(JClass c, String entry) {
+    private static void setSubSerializable(JClass c, List<String> sources) {
         for (JClass sub : World.get().getClassHierarchy().getAllSubclassesOf(c)) {
             if (!sub.isSerializable()) {
                 sub.setSerializable();
-                if (entry.equals("serializable")) {
+                if (sources.contains("serializable")) {
                     c.getDeclaredMethods()
                             .stream()
                             .filter(m -> SootClassLoader.readSubSigList.contains(m.getSubsignature().toString()))

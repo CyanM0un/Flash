@@ -17,10 +17,15 @@ public class PrioriKnow implements Plugin {
 
     @Override
     public void onStart() {
-        PrioriKnowConfig.loadConfig(
+        PrioriKnowConfig config = PrioriKnowConfig.loadConfig(
                 config_path,
                 World.get().getClassHierarchy(),
                 World.get().getTypeSystem());
+        logger.info("load {} sinks, {} transfers, {} ignores, {} imitates",
+                config.sinks().size(),
+                config.transfers().size(),
+                config.ignores().size(),
+                config.imitates().size());
     }
 
 }
