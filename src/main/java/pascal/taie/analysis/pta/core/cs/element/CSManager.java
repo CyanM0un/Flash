@@ -69,10 +69,14 @@ public interface CSManager {
      */
     InstanceField getInstanceField(CSObj base, JField field);
 
+    InstanceField getInstanceField(CSVar base, JField field);
+
     /**
      * @return the corresponding ArrayIndex pointer for given array object.
      */
     ArrayIndex getArrayIndex(CSObj array);
+
+    ArrayIndex getArrayIndex(CSVar array);
 
     /**
      * @return all variables (without contexts).

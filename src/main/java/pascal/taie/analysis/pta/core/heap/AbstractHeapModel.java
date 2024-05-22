@@ -38,17 +38,10 @@ import pascal.taie.util.collection.TwoKeyMap;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Predicate;
 
-import static pascal.taie.language.classes.ClassNames.STRING;
-import static pascal.taie.language.classes.ClassNames.STRING_BUFFER;
-import static pascal.taie.language.classes.ClassNames.STRING_BUILDER;
-import static pascal.taie.language.classes.ClassNames.THROWABLE;
+import static pascal.taie.language.classes.ClassNames.*;
 
 /**
  * All heap models should inherit this class, and we can define

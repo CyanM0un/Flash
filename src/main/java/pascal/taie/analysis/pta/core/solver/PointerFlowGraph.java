@@ -23,12 +23,18 @@
 package pascal.taie.analysis.pta.core.solver;
 
 import pascal.taie.analysis.graph.flowgraph.FlowKind;
-import pascal.taie.analysis.pta.core.cs.element.CSManager;
-import pascal.taie.analysis.pta.core.cs.element.Pointer;
+import pascal.taie.analysis.pta.core.cs.element.*;
+import pascal.taie.language.classes.JClass;
+import pascal.taie.language.classes.JField;
+import pascal.taie.language.type.Type;
+import pascal.taie.util.collection.Maps;
+import pascal.taie.util.collection.TwoKeyMap;
 import pascal.taie.util.collection.Views;
 import pascal.taie.util.graph.Edge;
 import pascal.taie.util.graph.Graph;
 
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -40,8 +46,17 @@ public class PointerFlowGraph implements Graph<Pointer> {
 
     private final CSManager csManager;
 
-    PointerFlowGraph(CSManager csManager) {
+    private Map<JField, Set<PointerFlowEdge>> fieldMatchEdges;
+
+    private TwoKeyMap<JClass, Type, Set<PointerFlowEdge>> arrayMatchEdges;
+
+    private Map<PointerFlowEdge, Integer> ifRangeMap;
+
+    public PointerFlowGraph(CSManager csManager) {
         this.csManager = csManager;
+        this.fieldMatchEdges = Maps.newMap();
+        this.arrayMatchEdges = Maps.newTwoKeyMap();
+        this.ifRangeMap = Maps.newMap();
     }
 
     /**
@@ -55,7 +70,24 @@ public class PointerFlowGraph implements Graph<Pointer> {
      * </ul>
      */
     public PointerFlowEdge addEdge(PointerFlowEdge edge) {
-        return edge.source().addEdge(edge);
+        if (edge.kind() == FlowKind.INSTANCE_STORE) {
+            if (edge.target() instanceof InstanceField iField) {
+                JField field = iField.getField();
+                fieldMatchEdges.computeIfAbsent(field, f -> new HashSet<>()).add(edge);
+            } else if (edge.target() instanceof ArrayIndex varArray) {
+                CSVar base = varArray.getArrayVar();
+                Type type = base.getType();
+                JClass jClass = base.getVar().getMethod().getDeclaringClass();
+                if (arrayMatchEdges.containsKey(jClass, type)) {
+                    arrayMatchEdges.get(jClass, type).add(edge);
+                } else {
+                    Set<PointerFlowEdge> set = new HashSet<>();
+                    set.add(edge);
+                    arrayMatchEdges.put(jClass, type, set);
+                }
+            }
+        }
+        return edge.target().addEdge(edge);
     }
 
     @Override
@@ -86,5 +118,21 @@ public class PointerFlowGraph implements Graph<Pointer> {
     @Override
     public Set<Pointer> getNodes() {
         return pointers().collect(Collectors.toUnmodifiableSet());
+    }
+
+    public Set<PointerFlowEdge> getMatchEdges(JField field) {
+        return fieldMatchEdges.getOrDefault(field, Set.of());
+    }
+
+    public Set<PointerFlowEdge> getMatchEdges(JClass jClass, Type type) {
+        return arrayMatchEdges.getOrDefault(jClass, type, Set.of());
+    }
+
+    public void addIfRange(PointerFlowEdge edge, int ifEnd) {
+        ifRangeMap.put(edge, ifEnd);
+    }
+
+    public int getIfRange(PointerFlowEdge edge) {
+        return ifRangeMap.getOrDefault(edge, -1);
     }
 }

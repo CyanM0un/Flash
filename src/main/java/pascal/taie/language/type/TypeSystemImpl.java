@@ -27,6 +27,7 @@ import pascal.taie.language.classes.ClassNames;
 import pascal.taie.language.classes.JClassLoader;
 import pascal.taie.util.AnalysisException;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentMap;
@@ -208,6 +209,15 @@ public class TypeSystemImpl implements TypeSystem {
             }
         }
         return false;
+    }
+
+    @Override
+    public boolean allSubType(List<Type> superTypes, List<Type> subTypes) {
+        if (superTypes.size() != subTypes.size()) return false;
+        for (int i = 0; i < superTypes.size(); i++) {
+            if (!isSubtype(superTypes.get(i), subTypes.get(i))) return false;
+        }
+        return true;
     }
 
     @Override

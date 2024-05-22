@@ -51,4 +51,34 @@ public final class Strings {
         return new String(chars);
     }
 
+    public static boolean isLegalContrValue(String value) {
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            if (!Character.isLetterOrDigit(ch) && ch != '_' && ch != '+' && ch != '-' && ch != '.') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static int extractParamIndex(String s) {
+        String last = s.split("-")[1];
+        if (last.contains("+")) {
+            return Integer.parseInt(last.split("\\+")[0]);
+        } else {
+            return Integer.parseInt(last);
+        }
+    }
+
+    public static String extractFieldName(String s) {
+        int _idx = s.indexOf("-");
+        String last = s.substring(_idx + 1);
+        if (last.contains("+")) return last.split("\\+")[0];
+        else if (last.contains("-")) return last.substring(last.lastIndexOf("-") + 1);
+        else return last;
+    }
+
+    public static boolean anyMatch(String reg) {
+        return reg.equals(".*");
+    }
 }

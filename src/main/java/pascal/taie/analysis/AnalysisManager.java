@@ -43,6 +43,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -77,9 +78,19 @@ public class AnalysisManager {
 
     private List<JMethod> methodScope;
 
+    private static LinkedList<JMethod> workList;
+
+    private static List<MethodAnalysis> methodAnalyses;
+
     public AnalysisManager(Plan plan) {
         this.plan = plan;
         this.keepAllResults = plan.keepResult().contains(Plan.KEEP_ALL);
+        workList = new LinkedList<>();
+        methodAnalyses = new ArrayList<>();
+    }
+
+    public static void addWL(JMethod method) {
+        if (!workList.contains(method)) workList.add(method);
     }
 
     /**
@@ -96,22 +107,30 @@ public class AnalysisManager {
             }
             executedAnalyses = new ArrayList<>();
         }
-        classScope = null;
-        methodScope = null;
         // execute analyses
-        plan.analyses().forEach(config -> {
-            Analysis analysis = Timer.runAndCount(
-                    () -> runAnalysis(config), config.getId(), Level.INFO);
-            if (!keepAllResults) {
-                executedAnalyses.add(analysis);
-                clearUnusedResults(analysis);
+        plan.analyses().forEach(config -> methodAnalyses.add((MethodAnalysis) getAnalysis(config)));
+        workList.addAll(World.get().getGCEntries());
+
+        while (!workList.isEmpty()) {
+            JMethod method = workList.poll();
+            if (!method.hasSummary()) {
+                runMethodAnalysis(method);
+            }
+        }
+    }
+
+    public static void runMethodAnalysis(JMethod m) {
+        methodAnalyses.forEach(analysis -> {
+            IR ir = m.getIR();
+            Object result = analysis.analyze(ir);
+            if (result != null) {
+                ir.storeResult(analysis.getId(), result);
             }
         });
     }
 
-    private Analysis runAnalysis(AnalysisConfig config) {
+    private Analysis getAnalysis(AnalysisConfig config) {
         Analysis analysis;
-        // Create analysis instance
         try {
             Class<?> clazz = Class.forName(config.getAnalysisClass());
             Constructor<?> ctor = clazz.getConstructor(AnalysisConfig.class);
@@ -130,131 +149,6 @@ public class AnalysisManager {
             throw new ConfigException(
                     config.getAnalysisClass() + " is not an analysis class");
         }
-        // Run the analysis
-        if (analysis instanceof ProgramAnalysis<?> pa) {
-            runProgramAnalysis(pa);
-        } else if (analysis instanceof ClassAnalysis<?> ca) {
-            runClassAnalysis(ca);
-        } else if (analysis instanceof MethodAnalysis<?> ma) {
-            runMethodAnalysis(ma);
-        } else {
-            throw new ConfigException(config.getAnalysisClass() +
-                    " is not a supported analysis class");
-        }
         return analysis;
-    }
-
-    private void runProgramAnalysis(ProgramAnalysis<?> analysis) {
-        Object result = analysis.analyze();
-        if (result != null) {
-            World.get().storeResult(analysis.getId(), result);
-        }
-    }
-
-    private void runClassAnalysis(ClassAnalysis<?> analysis) {
-        getClassScope().parallelStream()
-                .forEach(c -> {
-                    Object result = analysis.analyze(c);
-                    if (result != null) {
-                        c.storeResult(analysis.getId(), result);
-                    }
-                });
-    }
-
-    private List<JClass> getClassScope() {
-        if (classScope == null) {
-            Scope scope = World.get().getOptions().getScope();
-            classScope = switch (scope) {
-                case APP -> World.get()
-                        .getClassHierarchy()
-                        .applicationClasses()
-                        .toList();
-                case ALL -> World.get()
-                        .getClassHierarchy()
-                        .allClasses()
-                        .toList();
-                case REACHABLE -> {
-                    CallGraph<?, JMethod> callGraph = World.get().getResult(CallGraphBuilder.ID);
-                    yield callGraph.reachableMethods()
-                            .map(JMethod::getDeclaringClass)
-                            .distinct()
-                            .toList();
-                }
-            };
-            logger.info("{} classes in scope ({}) of class analyses",
-                    classScope.size(), scope);
-        }
-        return classScope;
-    }
-
-    private void runMethodAnalysis(MethodAnalysis<?> analysis) {
-        getMethodScope()
-                .parallelStream()
-                .forEach(m -> {
-                    IR ir = m.getIR();
-                    Object result = analysis.analyze(ir);
-                    if (result != null) {
-                        ir.storeResult(analysis.getId(), result);
-                    }
-                });
-    }
-
-    private List<JMethod> getMethodScope() {
-        if (methodScope == null) {
-            Scope scope = World.get().getOptions().getScope();
-            methodScope = switch (scope) {
-                case APP, ALL -> getClassScope()
-                        .stream()
-                        .map(JClass::getDeclaredMethods)
-                        .flatMap(Collection::stream)
-                        .filter(m -> !m.isAbstract())
-                        .toList();
-                case REACHABLE -> {
-                    CallGraph<?, JMethod> callGraph = World.get().getResult(CallGraphBuilder.ID);
-                    yield callGraph.reachableMethods().toList();
-                }
-            };
-            logger.info("{} methods in scope ({}) of method analyses",
-                    methodScope.size(), scope);
-        }
-        return methodScope;
-    }
-
-    /**
-     * @param analysis the analysis that just finished.
-     */
-    private void clearUnusedResults(Analysis analysis) {
-        // analysis has finished, we can remove its dependencies
-        // copy in-edges to a new list to avoid concurrent modifications
-        var edgesToRemove = new ArrayList<>(
-                dependenceGraph.getInEdgesOf(analysis.getId()));
-        edgesToRemove.forEach(e ->
-                dependenceGraph.removeEdge(e.source(), e.target()));
-        // select the analyses whose results are unused and not in keepResult
-        List<String> unused = executedAnalyses.stream()
-                .map(Analysis::getId)
-                .filter(id -> dependenceGraph.getOutDegreeOf(id) == 0)
-                .filter(id -> !plan.keepResult().contains(id))
-                .toList();
-        if (!unused.isEmpty()) {
-            logger.info("Clearing unused results of {}", unused);
-            for (String id : unused) {
-                int i;
-                for (i = 0; i < executedAnalyses.size(); ++i) {
-                    Analysis a = executedAnalyses.get(i);
-                    if (a.getId().equals(id)) {
-                        if (a instanceof ProgramAnalysis) {
-                            World.get().clearResult(id);
-                        } else if (a instanceof ClassAnalysis) {
-                            getClassScope().forEach(c -> c.clearResult(id));
-                        } else if (a instanceof MethodAnalysis) {
-                            getMethodScope().forEach(m -> m.getIR().clearResult(id));
-                        }
-                        break;
-                    }
-                }
-                executedAnalyses.remove(i);
-            }
-        }
     }
 }

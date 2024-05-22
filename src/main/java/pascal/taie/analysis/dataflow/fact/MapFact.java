@@ -22,6 +22,7 @@
 
 package pascal.taie.analysis.dataflow.fact;
 
+import pascal.taie.analysis.pta.core.cs.element.Pointer;
 import pascal.taie.util.Copyable;
 import pascal.taie.util.collection.Maps;
 
@@ -173,5 +174,9 @@ public class MapFact<K, V> implements Copyable<MapFact<K, V>> {
                 .sorted(Comparator.comparing(e -> e.getKey().toString()))
                 .map(e -> e.getKey() + "=" + e.getValue())
                 .collect(Collectors.joining(", ")) + "}";
+    }
+
+    public boolean contains(K key) {
+        return map.containsKey(key);
     }
 }

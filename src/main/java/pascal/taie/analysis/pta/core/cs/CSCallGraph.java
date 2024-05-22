@@ -103,6 +103,7 @@ public class CSCallGraph extends AbstractCallGraph<CSCallSite, CSMethod> {
         // Note: this method does not return the artificial Invokes
         // added to csMethod.getMethod().
         JMethod method = csMethod.getMethod();
+        if (method.isAbstract()) return Collections.emptySet();
         Context context = csMethod.getContext();
         ArrayList<CSCallSite> callSites = new ArrayList<>();
         for (Stmt s : method.getIR()) {

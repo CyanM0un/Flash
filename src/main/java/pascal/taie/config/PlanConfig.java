@@ -132,11 +132,11 @@ public class PlanConfig {
 
     /**
      * Converts option string to a valid YAML string.
-     * The option string is of format "key1:value1;key2:value2;...".
+     * The option string is of format "key1:value1; key2:value2; ...".
      */
     private static String toYAMLString(String optValue) {
         StringJoiner joiner = new StringJoiner("\n");
-        for (String keyValue : optValue.split(";")) {
+        for (String keyValue : optValue.split("; ")) {
             if (!keyValue.isBlank()) {
                 int i = keyValue.indexOf(':'); // split keyValue
                 joiner.add(keyValue.substring(0, i) + ": "
@@ -156,7 +156,7 @@ public class PlanConfig {
                         .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
                         .enable(YAMLGenerator.Feature.MINIMIZE_QUOTES));
         try {
-            logger.info("Writing analysis plan to {}", outFile.getAbsolutePath());
+//            logger.info("Writing analysis plan to {}", outFile.getAbsolutePath());
             mapper.writeValue(outFile, planConfigs);
         } catch (IOException e) {
             throw new ConfigException("Failed to write plan file to "

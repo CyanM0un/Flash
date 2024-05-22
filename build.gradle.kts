@@ -9,6 +9,7 @@ description = projectArtifactId
 version = projectVersion
 
 dependencies {
+    implementation("com.opencsv:opencsv:5.5.1")
     // Process options
     implementation("info.picocli:picocli:4.7.3")
     // Logger

@@ -255,6 +255,24 @@ public class Options implements Serializable {
     }
 
     @JsonProperty
+    @Option(names = {"-e", "--entry"},
+            description = "Deserialization Entry")
+    private String entry;
+
+    public String getEntry() {
+        return entry;
+    }
+
+    @JsonProperty
+    @Option(names = {"-fns", "--filterNonSerializable"},
+            description = "filter method by isSerializable")
+    private boolean filterNonSerializable;
+
+    public boolean isFilterNonSerializable() {
+        return filterNonSerializable;
+    }
+
+    @JsonProperty
     @Option(names = {"-a", "--analysis"},
             description = "Analyses to be executed",
             paramLabel = "<analysisID[=<options>]>",
@@ -330,10 +348,6 @@ public class Options implements Serializable {
         logger.info("Output directory: {}",
                 options.outputDir.getAbsolutePath());
         // TODO: turn off output in testing?
-        if (options.optionsFile == null) {
-            // write options to file only when it is not given
-            writeOptions(options, new File(options.outputDir, OPTIONS_FILE));
-        }
         return options;
     }
 
@@ -515,6 +529,8 @@ public class Options implements Serializable {
                 ", scope=" + scope +
                 ", nativeModel=" + nativeModel +
                 ", planFile=" + planFile +
+                ", entry=" + entry +
+                ", filterNonSerializable" + filterNonSerializable +
                 ", analyses=" + analyses +
                 ", onlyGenPlan=" + onlyGenPlan +
                 ", keepResult=" + keepResult +

@@ -29,7 +29,7 @@ import pascal.taie.util.Indexable;
 /**
  * Represents context-sensitive objects.
  */
-public class CSObj extends AbstractCSElement implements Indexable {
+public class  CSObj extends AbstractCSElement implements Indexable {
 
     private final Obj obj;
 

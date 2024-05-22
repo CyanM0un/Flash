@@ -30,21 +30,35 @@ import pascal.taie.language.type.Type;
  */
 public class InstanceField extends AbstractPointer {
 
-    private final CSObj base;
+    private final CSObj baseObj;
+
+    private final CSVar baseVar;
 
     private final JField field;
 
     InstanceField(CSObj base, JField field, int index) {
         super(index);
-        this.base = base;
+        this.baseObj = base;
         this.field = field;
+        this.baseVar = null;
+    }
+
+    InstanceField(CSVar base, JField field, int index) {
+        super(index);
+        this.baseVar = base;
+        this.field = field;
+        this.baseObj = null;
     }
 
     /**
      * @return the base object.
      */
     public CSObj getBase() {
-        return base;
+        return baseObj;
+    }
+
+    public CSVar getBaseVar() {
+        return baseVar;
     }
 
     /**
@@ -61,6 +75,7 @@ public class InstanceField extends AbstractPointer {
 
     @Override
     public String toString() {
-        return base + "." + field.getName();
+        if (baseObj != null) return baseObj + "." + field.getName();
+        else return baseVar + "." + field.getName();
     }
 }

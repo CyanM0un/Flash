@@ -22,7 +22,6 @@
 
 package pascal.taie.analysis.pta.core.cs.element;
 
-import pascal.taie.language.type.ArrayType;
 import pascal.taie.language.type.Type;
 
 /**
@@ -30,28 +29,42 @@ import pascal.taie.language.type.Type;
  */
 public class ArrayIndex extends AbstractPointer {
 
-    private final CSObj array;
+    private final CSObj arrayObj;
+
+    private final CSVar arrayVar;
 
     ArrayIndex(CSObj array, int index) {
         super(index);
-        this.array = array;
+        this.arrayObj = array;
+        this.arrayVar = null;
+    }
+
+    ArrayIndex(CSVar array, int index) {
+        super(index);
+        this.arrayVar = array;
+        this.arrayObj = null;
     }
 
     /**
      * @return the array object.
      */
     public CSObj getArray() {
-        return array;
+        return arrayObj;
+    }
+
+    public CSVar getArrayVar() {
+        return arrayVar;
     }
 
     @Override
     public Type getType() {
-        return ((ArrayType) array.getObject().getType())
-                .elementType();
+        return arrayVar.getType();
+//        return ((ArrayType) arrayObj.getObject().getType())
+//                .elementType();
     }
 
     @Override
     public String toString() {
-        return array + "[*]";
+        return (arrayObj != null) ? arrayObj + "[arr]" : arrayVar + "[arr]";
     }
 }

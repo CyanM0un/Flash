@@ -31,6 +31,7 @@ import pascal.taie.util.collection.Sets;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -41,9 +42,13 @@ abstract class AbstractPointer implements Pointer {
 
     private final int index;
 
-    private final Set<Pointer> successors = new HybridIndexableSet<>(true);
+    private final Set<Pointer> predecessors = new HybridIndexableSet<>(true);
+
+    private final Set<CSObj> newObjs = new HybridIndexableSet<>(true);
 
     private final ArrayList<PointerFlowEdge> outEdges = new ArrayList<>(4);
+
+    private final ArrayList<PointerFlowEdge> inEdges = new ArrayList<>(4);
 
     private Set<Predicate<CSObj>> filters = Set.of();
 
@@ -92,20 +97,30 @@ abstract class AbstractPointer implements Pointer {
 
     @Override
     public PointerFlowEdge addEdge(PointerFlowEdge edge) {
-        assert edge.source() == this;
-        if (successors.add(edge.target())) {
-            outEdges.add(edge);
+        assert edge.target() == this;
+        Pointer source = edge.source();
+        CSObj sourceObj = edge.sourceObj();
+        if (source != null && predecessors.add(source)) {
+            inEdges.add(edge);
+            source.addOutEdge(edge);
+            return edge;
+        } else if (sourceObj != null && newObjs.add(sourceObj)) {
+            inEdges.add(edge);
             return edge;
         } else if (edge.kind() == FlowKind.OTHER) {
-            for (PointerFlowEdge outEdge : outEdges) {
-                if (outEdge.equals(edge)) {
-                    return outEdge;
+            for (PointerFlowEdge inEdge : inEdges) {
+                if (inEdge.equals(edge)) {
+                    return inEdge;
                 }
             }
-            outEdges.add(edge);
             return edge;
         }
         return null;
+    }
+
+    @Override
+    public void addOutEdge(PointerFlowEdge edge) {
+        outEdges.add(edge);
     }
 
     @Override
@@ -114,7 +129,22 @@ abstract class AbstractPointer implements Pointer {
     }
 
     @Override
+    public Set<PointerFlowEdge> getInEdges() {
+        return Collections.unmodifiableSet(new ArraySet<>(inEdges, true));
+    }
+
+    @Override
     public int getOutDegree() {
         return outEdges.size();
+    }
+
+    public void removePFG(FlowKind kind) {
+        Iterator<PointerFlowEdge> iterator = inEdges.iterator();
+        while (iterator.hasNext()) {
+            PointerFlowEdge pfg = iterator.next();
+            if (pfg.kind().equals(kind)) {
+                iterator.remove();
+            }
+        }
     }
 }

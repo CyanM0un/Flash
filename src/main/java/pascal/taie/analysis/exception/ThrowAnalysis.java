@@ -44,11 +44,7 @@ public class ThrowAnalysis extends MethodAnalysis<ThrowResult> {
         } else {
             implicitThrowAnalysis = null;
         }
-        if ("pta".equals(getOptions().getString("algorithm"))) {
-            explicitThrowAnalysis = new PTABasedExplicitThrowAnalysis();
-        } else {
-            explicitThrowAnalysis = new IntraExplicitThrowAnalysis();
-        }
+        explicitThrowAnalysis = new IntraExplicitThrowAnalysis();
     }
 
     @Override

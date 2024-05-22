@@ -23,6 +23,8 @@
 package pascal.taie.language.classes;
 
 import pascal.taie.World;
+import pascal.taie.analysis.dataflow.analysis.methodsummary.plugin.TaintTransfer;
+import pascal.taie.frontend.cache.CachedIRBuilder;
 import pascal.taie.ir.IR;
 import pascal.taie.ir.proginfo.MethodRef;
 import pascal.taie.language.annotation.Annotation;
@@ -34,9 +36,7 @@ import pascal.taie.util.AnalysisException;
 import pascal.taie.util.Experimental;
 
 import javax.annotation.Nullable;
-import java.util.Collection;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Represents methods in the program. Each instance contains various
@@ -74,9 +74,21 @@ public class JMethod extends ClassMember {
     /**
      * Notes: This field is {@code transient} because it is serialized separately.
      *
-     * @see pascal.taie.frontend.cache.CachedIRBuilder
+     * @see CachedIRBuilder
      */
     private transient IR ir;
+
+    private boolean isSource;
+
+    private int[] tc;
+
+    private Set<TaintTransfer> transfers;
+
+    private boolean isIgnored;
+
+    private Map<String, String> imitatedBehavior;
+
+    private Map<String, String> summary;
 
     public JMethod(JClass declaringClass, String name, Set<Modifier> modifiers,
                    List<Type> paramTypes, Type returnType, List<ClassType> exceptions,
@@ -95,6 +107,12 @@ public class JMethod extends ClassMember {
         this.paramAnnotations = paramAnnotations;
         this.paramNames = paramNames;
         this.methodSource = methodSource;
+        this.isSource = false;
+        this.tc = null;
+        this.transfers = new HashSet<>();
+        this.isIgnored = false;
+        this.imitatedBehavior = new HashMap<>();
+        this.summary = new HashMap<>();
     }
 
     public boolean isAbstract() {
@@ -202,4 +220,73 @@ public class JMethod extends ClassMember {
         return MethodRef.get(declaringClass, name,
                 paramTypes, returnType, isStatic());
     }
+
+    public void setSource() {
+        this.isSource = true;
+    }
+
+    public boolean isSource() {
+        return isSource;
+    }
+
+    public void setSink(int[] tc) {
+        this.tc = tc;
+    }
+
+    public int[] getSink() {
+        return tc;
+    }
+
+    public boolean isSink() {
+        return tc != null;
+    }
+
+    public boolean isTransfer() {
+        return !transfers.isEmpty();
+    }
+
+    public void addTransfer(TaintTransfer transfer){
+        this.transfers.add(transfer);
+    }
+
+    public Set<TaintTransfer> getTransfer() {
+        return transfers;
+    }
+
+    public boolean isIgnored() {
+        return isIgnored;
+    }
+
+    public void setIgnored() {
+        this.isIgnored = true;
+    }
+
+    public void setImitatedBehavior(String key, String value) {
+        this.imitatedBehavior.put(key, value);
+    }
+
+    public boolean hasImitatedBehavior() {
+        return !imitatedBehavior.isEmpty();
+    }
+
+    public Map<String, String> getImitatedBehavior() {
+        return imitatedBehavior;
+    }
+
+    public void setSummary(String key, String value) {
+        summary.put(key, value);
+    }
+
+    public String getSummary(String key) {
+        return summary.getOrDefault(key, null);
+    }
+
+    public Map<String,String> getSummaryMap() {
+        return summary;
+    }
+
+    public boolean hasSummary() {
+        return !summary.isEmpty();
+    }
+
 }

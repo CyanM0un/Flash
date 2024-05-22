@@ -23,6 +23,7 @@
 package pascal.taie.analysis.pta.core.solver;
 
 import pascal.taie.analysis.graph.flowgraph.FlowKind;
+import pascal.taie.analysis.pta.core.cs.element.CSObj;
 import pascal.taie.analysis.pta.core.cs.element.Pointer;
 import pascal.taie.util.Hashes;
 import pascal.taie.util.collection.Sets;
@@ -34,16 +35,30 @@ public class PointerFlowEdge implements Edge<Pointer> {
 
     private final FlowKind kind;
 
-    private final Pointer source;
+    private final Pointer sourcePointer;
+
+    private final CSObj sourceObj;
 
     private final Pointer target;
+
+    private int lineNumber;
 
     private final Set<Transfer> transfers = Sets.newHybridSet();
 
     public PointerFlowEdge(FlowKind kind, Pointer source, Pointer target) {
         this.kind = kind;
-        this.source = source;
+        this.sourcePointer = source;
         this.target = target;
+        this.sourceObj = null;
+        this.lineNumber = -1;
+    }
+
+    public PointerFlowEdge(FlowKind kind, CSObj source, Pointer target) {
+        this.kind = kind;
+        this.sourcePointer = null;
+        this.target = target;
+        this.sourceObj = source;
+        this.lineNumber = -1;
     }
 
     public FlowKind kind() {
@@ -51,7 +66,11 @@ public class PointerFlowEdge implements Edge<Pointer> {
     }
 
     public Pointer source() {
-        return source;
+        return sourcePointer;
+    }
+
+    public CSObj sourceObj() {
+        return sourceObj;
     }
 
     public Pointer target() {
@@ -68,17 +87,10 @@ public class PointerFlowEdge implements Edge<Pointer> {
         return kind.name();
     }
 
-    public boolean addTransfer(Transfer transfer) {
-        return transfers.add(transfer);
-    }
-
-    public Set<Transfer> getTransfers() {
-        return transfers;
-    }
-
     @Override
     public int hashCode() {
-        return Hashes.hash(source, target);
+        if (sourcePointer != null) return Hashes.hash(sourcePointer, target);
+        else return Hashes.hash(sourceObj, target);
     }
 
     @Override
@@ -90,11 +102,29 @@ public class PointerFlowEdge implements Edge<Pointer> {
             return false;
         }
         PointerFlowEdge that = (PointerFlowEdge) o;
-        return source.equals(that.source) && target.equals(that.target);
+        if (sourcePointer != null) return sourcePointer.equals(that.sourcePointer) && target.equals(that.target);
+        else return sourceObj.equals(that.sourceObj) && target.equals(that.target);
     }
 
     @Override
     public String toString() {
-        return "[" + getInfo() + "]" + source + " -> " + target;
+        if (sourcePointer != null) return "[" + getInfo() + "]" + sourcePointer + " -> " + target;
+        else return "[" + getInfo() + "]" + sourceObj + " -> " + target;
+    }
+
+    public void setLineNumber(int lineNumber) {
+        this.lineNumber = lineNumber;
+    }
+
+    public int getLineNumber() {
+        return this.lineNumber;
+    }
+
+    public boolean addTransfer(Transfer transfer) {
+        return transfers.add(transfer);
+    }
+
+    public Set<Transfer> getTransfers() {
+        return transfers;
     }
 }

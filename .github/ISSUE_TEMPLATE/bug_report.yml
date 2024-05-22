@@ -77,7 +77,7 @@ body:
     id: additional-info
     attributes:
       label: Additional Information
-      description: Provide any additional information or context about the bug. Such as the analyzed program (or its `.tir`), the taint configuration (`taint-config.yml`), the log, etc.
+      description: Provide any additional information or context about the bug. Such as the analyzed program (or its `.tir`), the taint configuration (`priori-knowledge.yml`), the log, etc.
       placeholder: "Any other relevant information"
     validations:
       required: false

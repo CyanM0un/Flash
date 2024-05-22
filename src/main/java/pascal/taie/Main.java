@@ -35,6 +35,9 @@ import pascal.taie.config.Plan;
 import pascal.taie.config.PlanConfig;
 import pascal.taie.config.Scope;
 import pascal.taie.frontend.cache.CachedWorldBuilder;
+import pascal.taie.frontend.soot.SootClassLoader;
+import pascal.taie.frontend.soot.SootWorldBuilder;
+import pascal.taie.language.classes.JClass;
 import pascal.taie.util.Timer;
 import pascal.taie.util.collection.Lists;
 
@@ -136,16 +139,46 @@ public class Main {
                                 .allClasses()
                                 .count(),
                         World.get()
-                                .getClassHierarchy()
-                                .allClasses()
-                                .mapToInt(c -> c.getDeclaredMethods().size())
-                                .sum());
+                                .allMethods()
+                                .count());
+                setSerializable(options.getEntry());
             } catch (InstantiationException | IllegalAccessException |
                     NoSuchMethodException | InvocationTargetException e) {
                 System.err.println("Failed to build world due to " + e);
                 System.exit(1);
             }
         }, "WorldBuilder");
+    }
+
+    private static void setSerializable(String entry) {
+        World.get().getClassHierarchy().allClasses()
+                .filter(JClass::isSerializable)
+                .forEach(c -> {
+                    setSubSerializable(c, entry);
+                    setSuperSerializable(c);
+                });
+    }
+
+    private static void setSubSerializable(JClass c, String entry) {
+        for (JClass sub : World.get().getClassHierarchy().getAllSubclassesOf(c)) {
+            if (!sub.isSerializable()) {
+                sub.setSerializable();
+                if (entry.equals("serializable")) {
+                    c.getDeclaredMethods()
+                            .stream()
+                            .filter(m -> SootClassLoader.readSubSigList.contains(m.getSubsignature().toString()))
+                            .forEach(m -> World.get().addGCEntry(m));
+                }
+            }
+        }
+    }
+
+    private static void setSuperSerializable(JClass c) { // 主要解决调用父类方法问题，避免因为过滤serializable而漏报
+        JClass superClz = c.getSuperClass();
+        if (superClz!= null && !superClz.isSerializable()) {
+            superClz.setSerializable();
+            setSuperSerializable(superClz);
+        }
     }
 
     private static void executePlan(Plan plan) {

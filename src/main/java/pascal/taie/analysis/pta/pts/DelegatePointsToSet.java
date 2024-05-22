@@ -100,5 +100,22 @@ abstract class DelegatePointsToSet implements PointsToSet {
         return newSet(set.copy());
     }
 
+    @Override
+    public void remove(CSObj o) {
+        set.remove(o);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o instanceof DelegatePointsToSet that) {
+            return set.equals(that.set);
+        } else {
+            return false;
+        }
+    }
+
     protected abstract PointsToSet newSet(SetEx<CSObj> set);
 }

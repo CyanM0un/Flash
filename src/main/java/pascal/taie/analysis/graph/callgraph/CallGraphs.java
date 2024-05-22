@@ -32,14 +32,18 @@ import pascal.taie.ir.exp.InvokeInterface;
 import pascal.taie.ir.exp.InvokeSpecial;
 import pascal.taie.ir.exp.InvokeStatic;
 import pascal.taie.ir.exp.InvokeVirtual;
+import pascal.taie.ir.proginfo.MemberRef;
 import pascal.taie.ir.proginfo.MethodRef;
 import pascal.taie.ir.stmt.Invoke;
+import pascal.taie.language.classes.ClassHierarchy;
+import pascal.taie.language.classes.JClass;
 import pascal.taie.language.classes.JMethod;
 import pascal.taie.language.type.Type;
 import pascal.taie.util.AnalysisException;
 import pascal.taie.util.Indexer;
 import pascal.taie.util.SimpleIndexer;
 import pascal.taie.util.collection.Maps;
+import pascal.taie.util.collection.TwoKeyMap;
 import pascal.taie.util.graph.DotAttributes;
 import pascal.taie.util.graph.DotDumper;
 
@@ -50,6 +54,10 @@ import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.util.Comparator;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /**
  * Static utility methods about call graph.
@@ -57,6 +65,8 @@ import java.util.Map;
 public final class CallGraphs {
 
     private static final Logger logger = LogManager.getLogger(CallGraphs.class);
+
+    private static TwoKeyMap<JClass, MemberRef, Set<JMethod>> resolveTable = Maps.newTwoKeyMap();
 
     private CallGraphs() {
     }
@@ -91,6 +101,23 @@ public final class CallGraphs {
         } else {
             throw new AnalysisException("Cannot resolve Invoke: " + callSite);
         }
+    }
+
+    public static Set<JMethod> resolveCalleesOf(Invoke callSite) {
+        MethodRef methodRef = callSite.getMethodRef();
+        ClassHierarchy hierarchy = World.get().getClassHierarchy();
+        JClass cls = methodRef.getDeclaringClass();
+        Set<JMethod> callees = resolveTable.get(cls, methodRef);
+        if (callees == null) {
+            callees = hierarchy.getAllSubclassesOf(cls)
+                    .stream()
+                    .filter(Predicate.not(JClass::isAbstract))
+                    .map(c -> hierarchy.dispatch(c, methodRef))
+                    .filter(Objects::nonNull) // filter out null callees
+                    .collect(Collectors.toUnmodifiableSet());
+            resolveTable.put(cls, methodRef, callees);
+        }
+        return callees;
     }
 
     /**

@@ -22,12 +22,17 @@
 
 package pascal.taie.ir.exp;
 
+import pascal.taie.analysis.dataflow.fact.MapFact;
+import pascal.taie.ir.proginfo.FieldRef;
 import pascal.taie.ir.stmt.Invoke;
 import pascal.taie.ir.stmt.LoadArray;
 import pascal.taie.ir.stmt.LoadField;
 import pascal.taie.ir.stmt.StoreArray;
 import pascal.taie.ir.stmt.StoreField;
+import pascal.taie.language.classes.JClass;
+import pascal.taie.language.classes.JField;
 import pascal.taie.language.classes.JMethod;
+import pascal.taie.language.type.ClassType;
 import pascal.taie.language.type.Type;
 import pascal.taie.util.AnalysisException;
 import pascal.taie.util.Indexable;
@@ -38,9 +43,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serial;
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 /**
  * Representation of method/constructor parameters, lambda parameters,
@@ -226,6 +229,15 @@ public class Var implements LValue, RValue, Indexable {
         }
     }
 
+    public Set<FieldRef> getFieldRefs() {
+        Set<FieldRef> ret = new HashSet<>();
+        List<LoadField> loadFields = relevantStmts.getLoadFields();
+        List<StoreField> storeFields = relevantStmts.getStoreFields();
+        loadFields.forEach(l -> ret.add(l.getFieldRef()));
+        storeFields.forEach(s -> ret.add(s.getFieldRef()));
+        return ret;
+    }
+
     @Serial
     private void writeObject(ObjectOutputStream s) throws IOException {
         s.defaultWriteObject();
@@ -244,6 +256,33 @@ public class Var implements LValue, RValue, Indexable {
         if (relevantStmts == null) {
             relevantStmts = RelevantStmts.EMPTY;
         }
+    }
+
+    public JField getClassField(String fieldName) {
+        if (type instanceof ClassType classType) {
+            return getField(classType.getJClass(), fieldName);
+        } else {
+            return null;
+        }
+    }
+
+    private JField getField(JClass jClass, String fieldName) {
+        JField field = jClass.getDeclaredField(fieldName);
+        if (field == null && jClass.getSuperClass() != null) field = getField(jClass.getSuperClass(), fieldName);
+        return field;
+    }
+
+    public List<JField> getUsedFields() {
+        List<JField> usedFields = new ArrayList<>();
+        getStoreFields().forEach(storeField -> {
+            JField field = storeField.getFieldRef().resolve();
+            if (!usedFields.contains(field)) usedFields.add(field);
+        });
+        getLoadFields().forEach(loadField -> {
+            JField field = loadField.getFieldRef().resolve();
+            if (!usedFields.contains(field)) usedFields.add(field);
+        });
+        return usedFields;
     }
 
     /**

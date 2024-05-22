@@ -39,5 +39,5 @@ public enum FlowKind {
     PARAMETER_PASSING,
     RETURN,
 
-    OTHER,
+    OTHER, NEW, ELEMENT_STORE, SUMMARY_ASSIGN, NEW_CONTR,
 }

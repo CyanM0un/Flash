@@ -91,10 +91,10 @@ public class FieldRef extends MemberRef {
         if (field == null) {
             field = World.get().getClassHierarchy()
                     .resolveField(this);
-            if (field == null) {
-                throw new FieldResolutionFailedException(
-                        "Cannot resolve " + this);
-            }
+//            if (field == null) {
+//                throw new FieldResolutionFailedException(
+//                        "Cannot resolve " + this);
+//            }
         }
         return field;
     }

@@ -97,10 +97,14 @@ public interface Pointer extends Indexable {
      */
     PointerFlowEdge addEdge(PointerFlowEdge edge);
 
+    void addOutEdge(PointerFlowEdge edge);
+
     /**
      * @return out edges of this pointer in pointer flow graph.
      */
     Set<PointerFlowEdge> getOutEdges();
+
+    Set<PointerFlowEdge> getInEdges();
 
     /**
      * @return out degree of this pointer in pointer flow graph.

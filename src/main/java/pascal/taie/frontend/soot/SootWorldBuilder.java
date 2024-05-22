@@ -29,8 +29,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import pascal.taie.AbstractWorldBuilder;
 import pascal.taie.World;
-import pascal.taie.analysis.pta.PointerAnalysis;
-import pascal.taie.analysis.pta.plugin.reflection.LogItem;
+import pascal.taie.analysis.AnalysisManager;
+import pascal.taie.analysis.dataflow.analysis.SummaryAnalysisDriver;
 import pascal.taie.config.AnalysisConfig;
 import pascal.taie.config.Options;
 import pascal.taie.language.classes.ClassHierarchy;
@@ -119,7 +119,7 @@ public class SootWorldBuilder extends AbstractWorldBuilder {
 
         Scene scene = G.v().soot_Scene();
         addBasicClasses(scene);
-        addReflectionLogClasses(analyses, scene);
+//        addReflectionLogClasses(analyses, scene);
 
         // Configure Soot transformer
         Transform transform = new Transform(
@@ -153,43 +153,6 @@ public class SootWorldBuilder extends AbstractWorldBuilder {
         }
     }
 
-    /**
-     * Add classes in reflection log to the scene.
-     * Tai-e's ClassHierarchy depends on Soot's Scene, which does not change
-     * after hierarchy's construction, thus we need to add the classes
-     * in the reflection log before starting Soot.
-     * <p>
-     * TODO: this is a tentative solution. We should remove it and use other
-     *  way to load basic classes in the reflection log, so that world builder
-     *  does not depend on analyses to be executed.
-     *
-     * @param analyses the analyses to be executed
-     * @param scene    the Soot's scene
-     */
-    private static void addReflectionLogClasses(List<AnalysisConfig> analyses, Scene scene) {
-        analyses.forEach(config -> {
-            if (config.getId().equals(PointerAnalysis.ID)) {
-                String path = config.getOptions().getString("reflection-log");
-                if (path != null) {
-                    LogItem.load(path).forEach(item -> {
-                        // add target class
-                        String target = item.target;
-                        String targetClass;
-                        if (target.startsWith("<")) {
-                            targetClass = StringReps.getClassNameOf(target);
-                        } else {
-                            targetClass = target;
-                        }
-                        if (StringReps.isArrayType(targetClass)) {
-                            targetClass = StringReps.getBaseTypeNameOf(target);
-                        }
-                        scene.addBasicClass(targetClass);
-                    });
-                }
-            }
-        });
-    }
-
     private void build(Options options, Scene scene) {
         World.reset();
         World world = new World();
@@ -201,7 +164,7 @@ public class SootWorldBuilder extends AbstractWorldBuilder {
         // initialize class hierarchy
         ClassHierarchy hierarchy = new ClassHierarchyImpl();
         SootClassLoader loader = new SootClassLoader(
-                scene, hierarchy, options.isAllowPhantom());
+                scene, hierarchy, options.isAllowPhantom(), options.getEntry());
         hierarchy.setDefaultClassLoader(loader);
         hierarchy.setBootstrapClassLoader(loader);
         world.setClassHierarchy(hierarchy);

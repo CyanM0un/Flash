@@ -25,6 +25,7 @@ package pascal.taie.language.type;
 import pascal.taie.language.classes.JClassLoader;
 
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * This class provides APIs for retrieving types in the analyzed program.
@@ -52,4 +53,6 @@ public interface TypeSystem extends Serializable {
     boolean isSubtype(Type supertype, Type subtype);
 
     boolean isPrimitiveType(String typeName);
+
+    boolean allSubType(List<Type> argTypes, List<Type> paramTypes);
 }

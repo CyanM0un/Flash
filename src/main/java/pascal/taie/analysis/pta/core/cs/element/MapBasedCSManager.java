@@ -37,11 +37,7 @@ import pascal.taie.util.collection.Maps;
 import pascal.taie.util.collection.Streams;
 import pascal.taie.util.collection.TwoKeyMap;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Stream;
 
 /**
@@ -74,7 +70,17 @@ public class MapBasedCSManager implements CSManager {
     }
 
     @Override
+    public InstanceField getInstanceField(CSVar base, JField field) {
+        return ptrManager.getInstanceField(base, field);
+    }
+
+    @Override
     public ArrayIndex getArrayIndex(CSObj array) {
+        return ptrManager.getArrayIndex(array);
+    }
+
+    @Override
+    public ArrayIndex getArrayIndex(CSVar array) {
         return ptrManager.getArrayIndex(array);
     }
 
@@ -152,9 +158,13 @@ public class MapBasedCSManager implements CSManager {
 
         private final Map<JField, StaticField> staticFields = Maps.newMap();
 
-        private final TwoKeyMap<CSObj, JField, InstanceField> instanceFields = Maps.newTwoKeyMap();
+        private final TwoKeyMap<CSObj, JField, InstanceField> instanceObjFields = Maps.newTwoKeyMap();
 
-        private final Map<CSObj, ArrayIndex> arrayIndexes = Maps.newMap();
+        private final TwoKeyMap<CSVar, JField, InstanceField> instanceVarFields = Maps.newTwoKeyMap();
+
+        private final Map<CSObj, ArrayIndex> arrayObjIndexes = Maps.newMap();
+
+        private final Map<CSVar, ArrayIndex> arrayVarIndexes = Maps.newMap();
 
         /**
          * Counter for assigning unique indexes to Pointers.
@@ -172,12 +182,22 @@ public class MapBasedCSManager implements CSManager {
         }
 
         private InstanceField getInstanceField(CSObj base, JField field) {
-            return instanceFields.computeIfAbsent(base, field,
+            return instanceObjFields.computeIfAbsent(base, field,
+                    (b, f) -> new InstanceField(b, f, counter++));
+        }
+
+        private InstanceField getInstanceField(CSVar base, JField field) {
+            return instanceVarFields.computeIfAbsent(base, field,
                     (b, f) -> new InstanceField(b, f, counter++));
         }
 
         private ArrayIndex getArrayIndex(CSObj array) {
-            return arrayIndexes.computeIfAbsent(array,
+            return arrayObjIndexes.computeIfAbsent(array,
+                    a -> new ArrayIndex(a, counter++));
+        }
+
+        private ArrayIndex getArrayIndex(CSVar array) {
+            return arrayVarIndexes.computeIfAbsent(array,
                     a -> new ArrayIndex(a, counter++));
         }
 
@@ -199,11 +219,11 @@ public class MapBasedCSManager implements CSManager {
         }
 
         private Collection<InstanceField> getInstanceFields() {
-            return instanceFields.values();
+            return instanceObjFields.values();
         }
 
         private Collection<ArrayIndex> getArrayIndexes() {
-            return Collections.unmodifiableCollection(arrayIndexes.values());
+            return Collections.unmodifiableCollection(arrayObjIndexes.values());
         }
 
         private Stream<Pointer> pointers() {

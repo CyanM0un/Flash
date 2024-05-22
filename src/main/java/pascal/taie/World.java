@@ -28,6 +28,7 @@ import pascal.taie.ir.IRBuilder;
 import pascal.taie.language.classes.ClassHierarchy;
 import pascal.taie.language.classes.JMethod;
 import pascal.taie.language.natives.NativeModel;
+import pascal.taie.language.type.Type;
 import pascal.taie.language.type.TypeSystem;
 import pascal.taie.util.AbstractResultHolder;
 
@@ -37,9 +38,10 @@ import java.io.ObjectOutputStream;
 import java.io.Serial;
 import java.io.Serializable;
 import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
+import java.util.*;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Manages the whole-program information of the program being analyzed.
@@ -84,6 +86,10 @@ public final class World extends AbstractResultHolder
     private JMethod mainMethod;
 
     private Collection<JMethod> implicitEntries;
+
+    private LinkedList<JMethod> GCEntries = new LinkedList<>();
+
+    private Set<JMethod> invocationHandlerMethods = new HashSet<>();
 
     /**
      * Sets current world to {@code world}.
@@ -193,4 +199,47 @@ public final class World extends AbstractResultHolder
         s.defaultReadObject();
         setIRBuilder((IRBuilder) s.readObject());
     }
+
+    public void addGCEntry(JMethod m) {
+        if (!GCEntries.contains(m)) GCEntries.add(m);
+    }
+
+    public LinkedList<JMethod> getGCEntries() {
+        return GCEntries;
+    }
+
+    public void addInvocationHandlerMethod(JMethod m) {
+        invocationHandlerMethods.add(m);
+    }
+
+    public Set<JMethod> getInvocationHandlerMethod() {
+        return invocationHandlerMethods;
+    }
+
+    public Stream<JMethod> allMethods() {
+        return World.get()
+                .getClassHierarchy()
+                .allClasses()
+                .flatMap(j -> j.getDeclaredMethods().stream());
+    }
+
+    public Set<JMethod> filterMethods(String name, Type type) {
+        return allMethods()
+                .filter(m -> m.getName().equals(name) && !m.isAbstract() && !m.isPrivate())
+                .filter(m -> type != null ? typeSystem.isSubtype(type, m.getDeclaringClass().getType()) : true)
+                .collect(Collectors.toSet());
+    }
+
+    public Set<JMethod> filterMethods(String nameReg, Type clsType, List<Type> argTypes) {
+        Pattern pattern = Pattern.compile(nameReg);
+        return allMethods()
+                .filter(m -> pattern.matcher(m.getName()).find() && !m.isAbstract() && !m.isPrivate() && typeSystem.isSubtype(clsType, m.getDeclaringClass().getType()))
+                .filter(m-> {
+                    List<Type> paramTypes = new ArrayList<>();
+                    m.getIR().getParams().forEach(var -> paramTypes.add(var.getType()));
+                    return typeSystem.allSubType(argTypes, paramTypes);
+                })
+                .collect(Collectors.toSet());
+    }
+
 }

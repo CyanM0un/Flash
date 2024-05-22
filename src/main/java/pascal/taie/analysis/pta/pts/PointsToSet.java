@@ -86,4 +86,6 @@ public interface PointsToSet extends Iterable<CSObj>, Copyable<PointsToSet> {
     default Iterator<CSObj> iterator() {
         return getObjects().iterator();
     }
+
+    void remove(CSObj c);
 }

@@ -56,7 +56,6 @@ public class CallGraphBuilder extends ProgramAnalysis<CallGraph<Invoke, JMethod>
     @Override
     public CallGraph<Invoke, JMethod> analyze() {
         CGBuilder<Invoke, JMethod> builder = switch (algorithm) {
-            case "pta" -> new PTABasedBuilder();
             case "cha" -> new CHABuilder();
             default -> throw new ConfigException(
                     "Unknown call graph building algorithm: " + algorithm);

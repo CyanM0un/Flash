@@ -91,6 +91,10 @@ public class JClass extends AbstractResultHolder
      */
     private boolean isApplication;
 
+    private boolean isSerializable;
+
+    private boolean isIgnored;
+
     private int index = -1;
 
     public JClass(JClassLoader loader, String name) {
@@ -113,6 +117,8 @@ public class JClass extends AbstractResultHolder
         modifiers = builder.getModifiers();
         annotationHolder = builder.getAnnotationHolder();
         isApplication = builder.isApplication();
+        isSerializable = false;
+        isIgnored = false;
         isPhantom = builder.isPhantom();
         try {
             superClass = builder.getSuperClass();
@@ -209,6 +215,14 @@ public class JClass extends AbstractResultHolder
 
     public boolean isSynthetic() {
         return Modifier.hasSynthetic(modifiers);
+    }
+
+    public boolean isSerializable() {
+        return isSerializable;
+    }
+
+    public void setSerializable() {
+        if (!isSerializable) isSerializable = true;
     }
 
     @Nullable
@@ -386,5 +400,13 @@ public class JClass extends AbstractResultHolder
     @Override
     public String toString() {
         return getName();
+    }
+
+    public boolean isIgnored() {
+        return isIgnored;
+    }
+
+    public void setIgnored() {
+        this.isIgnored = true;
     }
 }

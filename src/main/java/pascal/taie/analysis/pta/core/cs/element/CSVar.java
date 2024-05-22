@@ -35,10 +35,13 @@ public class CSVar extends AbstractPointer implements CSElement {
 
     private final Context context;
 
+    private boolean isTransient;
+
     CSVar(Var var, Context context, int index) {
         super(index);
         this.var = var;
         this.context = context;
+        this.isTransient = false;
     }
 
     @Override
@@ -61,5 +64,13 @@ public class CSVar extends AbstractPointer implements CSElement {
     @Override
     public String toString() {
         return context + ":" + var.getMethod() + "/" + var.getName();
+    }
+
+    public boolean isTransient() {
+        return isTransient;
+    }
+
+    public void setTransient() {
+        this.isTransient = true;
     }
 }

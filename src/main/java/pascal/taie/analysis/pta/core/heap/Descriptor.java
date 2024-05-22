@@ -29,10 +29,7 @@ package pascal.taie.analysis.pta.core.heap;
 @FunctionalInterface
 public interface Descriptor {
 
-    /**
-     * Descriptor for entry objects.
-     */
-    Descriptor ENTRY_DESC = () -> "EntryPointObj";
+    Descriptor CONTR_DESC = () -> "Controllable";
 
     /**
      * @return string content of this descriptor.
