@@ -22,6 +22,11 @@
 
 package pascal.taie.util;
 
+import pascal.taie.analysis.dataflow.analysis.methodsummary.Utils.ContrUtil;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 /**
  * Static utility methods for {@link String}.
  */
@@ -62,11 +67,15 @@ public final class Strings {
     }
 
     public static int extractParamIndex(String s) {
-        String last = s.split("-")[1];
-        if (last.contains("+")) {
-            return Integer.parseInt(last.split("\\+")[0]);
+        String regex = "param-(\\d+)";
+        Pattern pattern = Pattern.compile(regex);
+        Matcher matcher = pattern.matcher(s);
+
+        if (matcher.find()) {
+            int value = Integer.parseInt(matcher.group(1));
+            return value;
         } else {
-            return Integer.parseInt(last);
+            return ContrUtil.iNOT_POLLUTED;
         }
     }
 

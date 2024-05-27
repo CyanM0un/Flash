@@ -180,10 +180,10 @@ public class MethodRef extends MemberRef {
         if (method == null) {
             method = World.get().getClassHierarchy()
                     .resolveMethod(this);
-            if (method == null) {
-                throw new MethodResolutionFailedException(
-                        "Cannot resolve " + this);
-            }
+//            if (method == null) {
+//                throw new MethodResolutionFailedException(
+//                        "Cannot resolve " + this);
+//            }
         }
         return method;
     }

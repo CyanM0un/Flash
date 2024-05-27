@@ -200,10 +200,10 @@ public class JMethod extends ClassMember {
 
     public IR getIR() {
         if (ir == null) {
-            if (isAbstract()) {
-                throw new AnalysisException("Abstract method " + this +
-                        " has no method body");
-            }
+//            if (isAbstract()) {
+//                throw new AnalysisException("Abstract method " + this +
+//                        " has no method body");
+//            }
             if (isNative()) {
                 ir = World.get().getNativeModel().buildNativeIR(this);
             } else {
@@ -274,7 +274,7 @@ public class JMethod extends ClassMember {
     }
 
     public void setSummary(String key, String value) {
-        summary.put(key, value);
+        if (key != null && value != null) summary.put(key, value);
     }
 
     public String getSummary(String key) {

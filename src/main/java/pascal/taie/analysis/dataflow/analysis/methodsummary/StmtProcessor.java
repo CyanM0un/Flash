@@ -154,7 +154,7 @@ public class StmtProcessor {
             CSVar to = csManager.getCSVar(context, stmt.getLValue());
             addPFGEdge(from, to, FlowKind.NEW, lineNumber);
             if (rvalue instanceof NewMultiArray) {
-                logger.info("[TODO] handle NewMultiArray"); // TODO
+//                logger.info("[TODO] handle NewMultiArray"); // TODO
             }
             return null;
         }
@@ -277,7 +277,7 @@ public class StmtProcessor {
                 CSVar retVar = csManager.getCSVar(context, ret);
                 String newV;
                 if (!drivenMap.contains(retVar)) {
-                    newV = getContr(retVar).getValue();
+                    newV = getContrValue(retVar);
                 } else {
                     newV = drivenMap.get(retVar).getValue();
                 }
@@ -418,8 +418,13 @@ public class StmtProcessor {
 
     private List<String> getCallSiteContr(List<CSVar> callSiteVars) {
         List<String> list = new ArrayList<>();
-        callSiteVars.forEach(var -> list.add(getContr(var).getValue()));
+        callSiteVars.forEach(var -> list.add(getContrValue(var)));
         return list;
+    }
+
+    private String getContrValue(Pointer p) {
+        Contr contr = getContr(p);
+        return contr != null ? contr.getValue() : ContrUtil.sNOT_POLLUTED;
     }
 
     private Contr getContr(Pointer p) {
@@ -494,7 +499,7 @@ public class StmtProcessor {
         if (value.contains(ContrUtil.sTHIS)) {
             CSVar base = callSiteVars.get(0);
             if (base != null) {
-                String baseValue = getContr(base).getValue();
+                String baseValue = getContrValue(base);
                 if (value.contains("-")) {
                     String fieldName = Strings.extractFieldName(value);
                     JField field = base.getVar().getClassField(fieldName);
@@ -614,14 +619,14 @@ public class StmtProcessor {
                     }
                     case ELEMENT_STORE -> {
                         Contr arrContr = getOrAddContr(p);
-                        arrContr.addArrElement(findPointsTo(pfe.source()).getMergedContr());
+                        arrContr.addArrElement(getContr(pfe.source()));
                         updateContr(p, arrContr);
                         pt.add(p, arrContr);
                     }
                     case OTHER -> {
                         if (pfe instanceof TaintTransferEdge tte) {
                             tte.getTransfers().forEach(t -> {
-                                Contr from = findPointsTo(pfe.source()).getMergedContr();
+                                Contr from = getContr(pfe.source());
                                 if (ContrUtil.isControllable(from)) {
                                     Type type = t instanceof SpecialType st ? st.getType() : tte.target().getType();
                                     Contr contr = from.copy();
@@ -705,7 +710,9 @@ public class StmtProcessor {
         String behavior = imitatedBehavior.get("jump");
         switch (behavior) {
             case "constructor" -> { // TODO 做一个类型的过滤以及数组参数的模拟
-                Set<JMethod> callees = World.get().filterMethods("<init>", null);
+                int idx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
+                Contr fromContr = getContr(callSiteVars.get(idx));
+                Set<JMethod> callees = World.get().filterMethods("<init>", fromContr.getOrigin().getType());
                 for (JMethod init : callees) {
                     List<String> edgeContr = new ArrayList<>();
                     edgeContr.add(csContr.get(0));
@@ -718,10 +725,10 @@ public class StmtProcessor {
             }
             case "inference" -> {
                 int idx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
-                int ridx = InvokeUtils.toInt(imitatedBehavior.get("rIdx")) + 1;
-                int pidx = InvokeUtils.toInt(imitatedBehavior.get("pIdx")) + 1;
+                int ridx = InvokeUtils.toInt(imitatedBehavior.get("recIdx")) + 1;
+                int pidx = InvokeUtils.toInt(imitatedBehavior.get("paramIdx")) + 1;
                 CSVar name = callSiteVars.get(idx);
-                String contrValue = getContr(name).getValue();
+                String contrValue = getContrValue(name);
                 String reg = ContrUtil.convert2Reg(contrValue);
                 if (reg != null && !Strings.anyMatch(reg)) { // anyMatch当作sink
                     logger.info("[+] possible method name regex {}", reg);
@@ -758,13 +765,13 @@ public class StmtProcessor {
             }
             case "toString" -> {
                 List<String> edgeContr = new ArrayList<>();
-                int toStringIdx = InvokeUtils.toInt(imitatedBehavior.get("toStringIdx")) + 1;
-                if (!ContrUtil.isControllable(csContr.get(toStringIdx))) break;
-                edgeContr.add(csContr.get(toStringIdx));
-                CSVar toStringVar = callSiteVars.get(toStringIdx);
+                int fromIdx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
+                if (!ContrUtil.isControllable(csContr.get(fromIdx))) break;
+                edgeContr.add(csContr.get(fromIdx));
+                CSVar toStringVar = callSiteVars.get(fromIdx);
                 Contr toStringContr = drivenMap.get(toStringVar);
-                Type type = getContrType(toStringContr);
-                Set<JMethod> callees = World.get().filterMethods("toString", type);
+                Type recType = getContrType(toStringContr);
+                Set<JMethod> callees = World.get().filterMethods("toString", recType, new ArrayList<>());
                 for (JMethod toString : callees) {
                     csCallGraph.addEdge(getCallEdge(stmt, toString, edgeContr));
                     addWL(toString);
@@ -839,8 +846,10 @@ public class StmtProcessor {
             if (!ContrUtil.isControllable(getContr(base))
                     && ContrUtil.isControllable(contr)) {
                 Contr old = drivenMap.get(base);
-                old.setValue(ContrUtil.sPOLLUTED);
-                drivenMap.update(base, old);
+                if (old != null) {
+                    old.setValue(ContrUtil.sPOLLUTED);
+                    drivenMap.update(base, old);
+                }
             }
         }
     }
@@ -853,7 +862,7 @@ public class StmtProcessor {
                 drivenMap.remove(param);
                 String key = "param-" + i;
                 String oldV = curMethod.getSummary(key);
-                String newV = getContr(param).getValue();
+                String newV = getContrValue(param);
                 if (ContrUtil.needUpdateInMerge(oldV, newV)) curMethod.setSummary(key, newV);
             }
         }
@@ -865,7 +874,7 @@ public class StmtProcessor {
                     String key = tv.getName().substring(1) + "-" + field.getName();
                     String oldV = curMethod.getSummary(key);
                     String newV;
-                    if (!drivenMap.contains(to)) newV = getContr(to).getValue();
+                    if (!drivenMap.contains(to)) newV = getContrValue(to);
                     else newV = drivenMap.get(to).getValue();
                     if (ContrUtil.needUpdateInMerge(oldV, newV)) {
                         curMethod.setSummary(key, newV);

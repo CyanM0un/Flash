@@ -35,18 +35,22 @@ public class ContrUtil {
     private static final Logger logger = LogManager.getLogger(ContrUtil.class);
 
     public static String int2String(int i) {
-        if (i >= 0) return sParam + "+" + i;
+        if (i >= 0) return sParam + "-" + i;
         else if (i == iTHIS) return sTHIS;
         else if (i == iPOLLUTED) return sPOLLUTED;
         else return sNOT_POLLUTED;
     }
 
     public static int string2Int(String s) {
-        if (s == null) return iNOT_POLLUTED;
-        else if (s.contains(sPOLLUTED)) return iPOLLUTED;
-        else if (s.contains(sParam)) return Strings.extractParamIndex(s);
-        else if (s.contains(sTHIS)) return iTHIS;
-        else return iNOT_POLLUTED;
+        try {
+            if (s == null) return iNOT_POLLUTED;
+            else if (s.contains(sPOLLUTED)) return iPOLLUTED;
+            else if (s.contains(sTHIS)) return iTHIS;
+            else if (s.contains(sParam)) return Strings.extractParamIndex(s);
+        } catch (Exception e) {
+            logger.info("[-] error parsing {}", s);
+        }
+        return iNOT_POLLUTED;
     }
 
     public static List<Integer> string2Int(List<String> values) {

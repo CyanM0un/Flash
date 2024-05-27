@@ -26,6 +26,7 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import pascal.taie.World;
+import pascal.taie.analysis.dataflow.analysis.SummaryAnalysisDriver;
 import pascal.taie.analysis.graph.callgraph.CallGraph;
 import pascal.taie.analysis.graph.callgraph.CallGraphBuilder;
 import pascal.taie.config.AnalysisConfig;
@@ -117,6 +118,9 @@ public class AnalysisManager {
                 runMethodAnalysis(method);
             }
         }
+
+        SummaryAnalysisDriver analysis = (SummaryAnalysisDriver) getAnalysis(methodAnalyses, SummaryAnalysisDriver.ID);
+        analysis.finish();
     }
 
     public static void runMethodAnalysis(JMethod m) {
@@ -127,6 +131,15 @@ public class AnalysisManager {
                 ir.storeResult(analysis.getId(), result);
             }
         });
+    }
+
+    private MethodAnalysis getAnalysis(List<MethodAnalysis> methodAnalyses, String id) {
+        for (MethodAnalysis analysis : methodAnalyses) {
+            if (analysis.getId().equals(id)) {
+                return analysis;
+            }
+        }
+        return null;
     }
 
     private Analysis getAnalysis(AnalysisConfig config) {

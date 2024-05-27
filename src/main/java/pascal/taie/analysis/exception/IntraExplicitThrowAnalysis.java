@@ -121,7 +121,7 @@ class IntraExplicitThrowAnalysis implements ExplicitThrowAnalysis {
         try {
             return invoke.isDynamic() ?
                     List.of() : // InvokeDynamic.getMethodRef() is unavailable
-                    invoke.getMethodRef().resolve().getExceptions();
+                    (invoke.getMethodRef().resolve() == null ? List.of() : invoke.getMethodRef().resolve().getExceptions());
         } catch (MethodResolutionFailedException e) {
             logger.warn(e.getMessage());
             return List.of();

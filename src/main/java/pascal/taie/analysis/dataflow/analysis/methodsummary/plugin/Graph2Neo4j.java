@@ -36,8 +36,8 @@ public class Graph2Neo4j implements Plugin {
 
     @Override
     public void onFinish() {
-        String node_path = db_path + "import/nodes.csv";
-        String relationship_path = db_path + "import/edges.csv";
+        String node_path = db_path + "/import/nodes.csv";
+        String relationship_path = db_path + "/import/edges.csv";
         try {
             CSVWriter nodeWriter = new CSVWriter(new FileWriter(node_path, false));
             CSVWriter edgeWriter = new CSVWriter(new FileWriter(relationship_path, false));
@@ -50,10 +50,10 @@ public class Graph2Neo4j implements Plugin {
             graph2CSV(nodeWriter, edgeWriter, edges);
 
             String command = "neo4j-admin database import full --nodes=import/nodes.csv --relationships=import/edges.csv --overwrite-destination neo4j";
-            logger.info("[+] use {} to load graph to neo4j", command);
-//            ProcessBuilder process = new ProcessBuilder("cmd", "/c", command);
-//            process.directory(new File(db_path + "bin"));
-//            process.start();
+//            logger.info("[+] use {} to load graph to neo4j", command);
+            ProcessBuilder process = new ProcessBuilder("cmd", "/c", command);
+            process.directory(new File(db_path + "bin"));
+            process.start();
 
             nodeWriter.close();
             edgeWriter.close();

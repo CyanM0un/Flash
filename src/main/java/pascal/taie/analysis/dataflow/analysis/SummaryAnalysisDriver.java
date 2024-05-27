@@ -65,6 +65,10 @@ public class SummaryAnalysisDriver extends MethodAnalysis<DataflowResult<Stmt, C
         plugin.onStart();
     }
 
+    public void finish() {
+        plugin.onFinish();
+    }
+
     @Override
     public DataflowResult<Stmt, ContrFact> analyze(IR ir) {
         JMethod method = ir.getMethod();
