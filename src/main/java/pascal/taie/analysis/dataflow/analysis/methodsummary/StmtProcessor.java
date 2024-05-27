@@ -221,8 +221,10 @@ public class StmtProcessor {
                     InstanceField iField = csManager.getInstanceField(base, field);
                     PointerFlowEdge edge = new PointerFlowEdge(FlowKind.INSTANCE_STORE, from, iField);
                     addPFGEdge(edge, Identity.get(), lineNumber);
-                    int ifEnd = stackManger.getIfEnd();
-                    if (ifEnd != -1) pointerFlowGraph.addIfRange(edge, ifEnd);
+                    if (Objects.equals(curMethod, stackManger.getCurIfEndMethod())) {
+                        int ifEnd = stackManger.getIfEnd();
+                        if (ifEnd != -1) pointerFlowGraph.addIfRange(edge, ifEnd);
+                    }
                 }
             }
             return null;
@@ -261,7 +263,7 @@ public class StmtProcessor {
             CSVar ifVar = csManager.getCSVar(context, stmt.getCondition().getOperand1()); // 一般都是左值，当然也可以都检测一下
             Contr ifContr = getContr(ifVar);
             if (ContrUtil.isControllable(ifContr)) {
-                stackManger.pushIf(stmt.getTarget());
+                stackManger.pushIf(stmt.getTarget(), curMethod);
             }
             return null;
         }
@@ -486,7 +488,7 @@ public class StmtProcessor {
                     ret.addAll(chaTargets);
                 } else {
                     ret.addAll(filterCHA(chaTargets, baseFact.getType()));
-                    if (stmt.isInterface()) processDynamicProxy(stmt, csContr); // 粗略认为上面的方法base无法接到invoke
+                    if (stmt.isInterface() && ContrUtil.isCallSite(baseFact.getValue())) processDynamicProxy(stmt, csContr); // 值为polluted的存在误报，但这样是否有漏报？
                 }
             }
         } else {
@@ -613,7 +615,7 @@ public class StmtProcessor {
                         }
                         if (!processAlias(source, matchEdges, pt, pfe.getLineNumber())) {
                             Contr baseContr = getContr(base);
-                            if (ContrUtil.isControllable(baseContr) && !base.isTransient()) {
+                            if (ContrUtil.isControllable(baseContr) && !contr.isTransient()) {
                                 if (fieldName.equals("this$0")) contr.updateValue(baseContr.getValue()); // Class.this的一种访问形式
                                 else contr.updateValue(baseContr.getValue() + "-" +fieldName);
                             }

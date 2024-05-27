@@ -4,7 +4,9 @@ import pascal.taie.analysis.pta.core.cs.element.Pointer;
 import pascal.taie.ir.stmt.Stmt;
 import pascal.taie.language.classes.JMethod;
 
+import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.Stack;
 
 public class StackManger {
@@ -15,10 +17,13 @@ public class StackManger {
 
     private LinkedList<Stmt> ifStack;
 
+    private Map<Stmt, JMethod> ifEndMap;
+
     public StackManger() {
         this.methodStack = new Stack<>();
         this.queryStack = new Stack<>();
         this.ifStack = new LinkedList<>();
+        this.ifEndMap = new HashMap<>();
     }
 
     public void pushMethod(JMethod method) {
@@ -49,8 +54,9 @@ public class StackManger {
         return queryStack.contains(pointer);
     }
 
-    public void pushIf(Stmt ifEnd) {
+    public void pushIf(Stmt ifEnd, JMethod method) {
         ifStack.push(ifEnd);
+        ifEndMap.put(ifEnd, method);
     }
 
     public boolean isInIf() {
@@ -63,14 +69,18 @@ public class StackManger {
 
     public void popIf(Stmt stmt) {
         ifStack.remove(stmt);
+        ifEndMap.remove(stmt);
     }
 
     public Stmt getCurIfEnd() {
         return ifStack.peek();
     }
 
+    public JMethod getCurIfEndMethod() {
+        return ifEndMap.getOrDefault(getCurIfEnd(), null);
+    }
+
     public int getIfEnd() {
         return isInIf() ? getCurIfEnd().getLineNumber() : -1;
     }
-
 }
