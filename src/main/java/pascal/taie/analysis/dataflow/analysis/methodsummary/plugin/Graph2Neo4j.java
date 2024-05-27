@@ -52,7 +52,7 @@ public class Graph2Neo4j implements Plugin {
             String command = "neo4j-admin database import full --nodes=import/nodes.csv --relationships=import/edges.csv --overwrite-destination neo4j";
 //            logger.info("[+] use {} to load graph to neo4j", command);
             ProcessBuilder process = new ProcessBuilder("cmd", "/c", command);
-            process.directory(new File(db_path + "bin"));
+            process.directory(new File(db_path + "/bin"));
             process.start();
 
             nodeWriter.close();

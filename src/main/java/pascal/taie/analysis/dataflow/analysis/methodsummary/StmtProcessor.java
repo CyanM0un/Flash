@@ -712,7 +712,8 @@ public class StmtProcessor {
             case "constructor" -> { // TODO 做一个类型的过滤以及数组参数的模拟
                 int idx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
                 Contr fromContr = getContr(callSiteVars.get(idx));
-                Set<JMethod> callees = World.get().filterMethods("<init>", fromContr.getOrigin().getType());
+                Type recType = fromContr != null ? fromContr.getOrigin().getType() : null;
+                Set<JMethod> callees = World.get().filterMethods("<init>", recType);
                 for (JMethod init : callees) {
                     List<String> edgeContr = new ArrayList<>();
                     edgeContr.add(csContr.get(0));
