@@ -345,7 +345,10 @@ public class StmtProcessor {
             for (JMethod callee : callees) {
                 if (isIgnored(callee)) continue;
                 Map<String, String> summary = callee.getSummaryMap();
-                if (stackManger.containsMethod(callee) && summary.isEmpty() && retContr != null) retContr.setValue(ContrUtil.sPOLLUTED); // 处理递归导致的忽略问题，直接设为可控
+                if (stackManger.containsMethod(callee)) {
+                    if (retContr != null) retContr.setValue(ContrUtil.sPOLLUTED); // 处理递归导致的忽略问题，直接设为可控
+                    continue;
+                }
                 for (String sKey : summary.keySet()) {
                     String sValue = summary.get(sKey);
                     if (sKey.equals("return")) { // return
