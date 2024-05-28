@@ -201,7 +201,10 @@ public final class World extends AbstractResultHolder
     }
 
     public void addGCEntry(JMethod m) {
-        if (!GCEntries.contains(m)) GCEntries.add(m);
+        if (!GCEntries.contains(m)) {
+            GCEntries.add(m);
+            m.setSource();
+        }
     }
 
     public LinkedList<JMethod> getGCEntries() {
