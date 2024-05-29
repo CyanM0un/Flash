@@ -488,7 +488,11 @@ public class StmtProcessor {
                     ret.addAll(chaTargets);
                 } else {
                     ret.addAll(filterCHA(chaTargets, baseFact.getType()));
-                    if (stmt.isInterface() && ContrUtil.isCallSite(baseFact.getValue())) processDynamicProxy(stmt, csContr); // 值为polluted的存在误报，但这样是否有漏报？
+                    if (stmt.isInterface()
+                            && ContrUtil.isCallSite(baseFact.getValue()) // 值为polluted的存在误报，但这样是否有漏报？
+                            && !baseFact.isCasted()) {
+                        processDynamicProxy(stmt, csContr);
+                    }
                 }
             }
         } else {
@@ -591,6 +595,7 @@ public class StmtProcessor {
                                     Contr contr = Contr.newInstance(p);
                                     contr.setType(st.getType());
                                     contr.setValue(from.getValue());
+                                    contr.setCasted();
                                     pt.add(p, contr);
                                 }
                             });

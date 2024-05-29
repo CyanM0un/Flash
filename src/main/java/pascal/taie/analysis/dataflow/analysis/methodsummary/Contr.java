@@ -21,6 +21,8 @@ public class Contr {
 
     private boolean isNew = false;
 
+    private boolean isCasted = false; // 反序列化中代理对象不能再cast
+
     private String value = ContrUtil.sNOT_POLLUTED;
 
     private String constString;
@@ -78,6 +80,14 @@ public class Contr {
 
     public void setNew() {
         this.isNew = true;
+    }
+
+    public boolean isCasted() {
+        return isCasted;
+    }
+
+    public void setCasted() {
+        this.isCasted = true;
     }
 
     public String getValue() {
@@ -143,6 +153,8 @@ public class Contr {
         copy.setType(this.type);
         copy.setValue(this.value);
         copy.setConstString(this.constString);
+        if (isCasted) copy.setCasted();
+        if (isNew) copy.setNew();
         if (isTransient) copy.setTransient();
         return copy;
     }
