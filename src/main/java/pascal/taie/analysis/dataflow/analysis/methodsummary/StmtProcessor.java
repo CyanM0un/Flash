@@ -2,7 +2,6 @@ package pascal.taie.analysis.dataflow.analysis.methodsummary;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import pascal.taie.AbstractWorldBuilder;
 import pascal.taie.World;
 import pascal.taie.analysis.AnalysisManager;
 import pascal.taie.analysis.dataflow.analysis.ContrAlloc;
@@ -15,7 +14,6 @@ import pascal.taie.analysis.graph.flowgraph.FlowKind;
 import pascal.taie.analysis.pta.core.cs.CSCallGraph;
 import pascal.taie.analysis.pta.core.cs.context.Context;
 import pascal.taie.analysis.pta.core.cs.element.*;
-import pascal.taie.analysis.pta.core.heap.Descriptor;
 import pascal.taie.analysis.pta.core.heap.HeapModel;
 import pascal.taie.analysis.pta.core.heap.MockObj;
 import pascal.taie.analysis.pta.core.heap.Obj;
@@ -315,8 +313,7 @@ public class StmtProcessor {
             if (isIgnoredCallSite(csContr, ref)) return null;
             processReceiver(ref, base, csContr);
             if (ref.isSink()) {
-                checkReceiverType(ref, base, csContr);
-                csCallGraph.addEdge(getCallEdge(stmt, ref, csContr));
+                if (checkRequiredType(ref, callSiteVars, csContr)) csCallGraph.addEdge(getCallEdge(stmt, ref, csContr));
                 if (ref.hasImitatedBehavior()) processBehavior(ref, stmt, callSiteVars, csContr);
                 return null;
             }
@@ -723,6 +720,7 @@ public class StmtProcessor {
                 int idx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
                 Contr fromContr = getContr(callSiteVars.get(idx));
                 Type recType = fromContr != null ? fromContr.getOrigin().getType() : null;
+                if (recType == null) break;
                 Set<JMethod> callees = World.get().filterMethods("<init>", recType);
                 for (JMethod init : callees) {
                     List<String> edgeContr = new ArrayList<>();
@@ -741,19 +739,24 @@ public class StmtProcessor {
                 CSVar name = callSiteVars.get(idx);
                 String contrValue = getContrValue(name);
                 String reg = ContrUtil.convert2Reg(contrValue);
-                if (reg != null && !Strings.anyMatch(reg)) { // anyMatch当作sink
-                    logger.info("[+] possible method name regex {}", reg);
+                CSVar param = callSiteVars.get(pidx);
+                ArrayList<Contr> argContrs = drivenMap.contains(param) ? drivenMap.get(param).getArrayElements() : new ArrayList<>();
+                List<Type> argTypes = argContrs.stream().map(Contr::getType).toList();
+                CSVar recv = callSiteVars.get(ridx);
+                Type recvType = drivenMap.contains(recv) ? drivenMap.get(recv).getType() : null;
+                if (recvType == null) break;
+                if (reg != null && !recvType.getName().equals("java.lang.Object") && !argTypes.isEmpty()) {
                     List<String> edgeContr = new ArrayList<>();
                     edgeContr.add(csContr.get(ridx));
-                    CSVar param = callSiteVars.get(pidx);
-                    ArrayList<Contr> argContrs = drivenMap.contains(param) ? drivenMap.get(param).getArrayElements() : new ArrayList<>();
                     argContrs.forEach(argContr -> edgeContr.add(argContr.getValue()));
-                    List<Type> argTypes = argContrs.stream().map(Contr::getType).toList();
-                    Set<JMethod> callees = World.get().filterMethods(reg, drivenMap.get(callSiteVars.get(ridx)).getType(), argTypes); // for example getxxx
+                    Set<JMethod> callees = World.get().filterMethods(reg, recvType, argTypes); // for example getxxx
+                    logger.info("[+] possible callees size {}", callees.size());
                     for (JMethod callee : callees) {
                         csCallGraph.addEdge(getCallEdge(stmt, callee, edgeContr));
                         addWL(callee);
                     }
+                } else if (Objects.equals(reg, ".*") && ContrUtil.isControllable(drivenMap.get(recv)) && ContrUtil.isControllable(drivenMap.get(param))) {
+                    csCallGraph.addEdge(getCallEdge(stmt, method, csContr));
                 }
             }
             case "get" -> {
@@ -829,16 +832,19 @@ public class StmtProcessor {
         return false;
     }
 
-    private void checkReceiverType(JMethod ref, CSVar base, List<String> csContr) {
-        if (ref.toString().equals("<java.lang.Class: java.lang.Object newInstance()>")
-                && drivenMap.get(base).getOrigin() instanceof InstanceField iField
-                && iField.getField().getGSignature() != null) {
-            String gSignature = iField.getField().getGSignature().toString();
-            if (gSignature.contains("extends")) {
-                csContr.clear();
-                csContr.add(ContrUtil.sNOT_POLLUTED); // 直接设为不可控
+    private boolean checkRequiredType(JMethod ref, List<CSVar> callSiteVars, List<String> csContr) { // 一些特殊情况，减少误报
+        if (ref.toString().equals("<java.lang.Class: java.lang.Object newInstance()>")) {
+            CSVar base = callSiteVars.get(0);
+            if (drivenMap.contains(base)
+                    && drivenMap.get(base).getOrigin() instanceof InstanceField iField
+                    && iField.getField().getGSignature() != null) {
+                String gSignature = iField.getField().getGSignature().toString();
+                if (gSignature.contains("extends")) {
+                    return false;
+                }
             }
         }
+        return !ref.toString().equals("<java.lang.reflect.Method: java.lang.Object invoke(java.lang.Object,java.lang.Object[])>");
     }
 
     private Collection<? extends JMethod> filterCHA(Set<JMethod> methods, Type type) {
