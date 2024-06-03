@@ -54,22 +54,17 @@ public class SummaryAnalysis extends AbstractDataflowAnalysis<Stmt, ContrFact> {
 
     @Override
     public ContrFact newBoundaryFact() { // 直接根据第一次的分析结果初始化参数可控性
-        JMethod curMethod = cfg.getIR().getMethod();
-        List<String> csContr = new ArrayList<>();
-        csCallGraph.edgesInTo(csManager.getCSMethod(context, curMethod)).forEach(edge -> csContr.addAll(edge.getCSContr()));
         List<Var> params = cfg.getIR().getParams();
         for (int i = 0; i < params.size(); i++) {
             CSVar param = csManager.getCSVar(context, params.get(i));
-            String paramValue = (csContr.isEmpty() || ContrUtil.isControllable(csContr.get(i + 1))) ? ContrUtil.int2String(i) : csContr.get(i + 1);
-            CSObj csContrParam = ContrUtil.getObj(param, paramValue, heapModel, context, csManager);
+            CSObj csContrParam = ContrUtil.getObj(param, ContrUtil.int2String(i), heapModel, context, csManager);
             stmtProcessor.addPFGEdge(csContrParam, param, FlowKind.NEW_CONTR, cfg.getEntry().getLineNumber());
         }
         Var thisVar = cfg.getIR().getThis();
         if (thisVar != null) {
             CSVar csThisVar = csManager.getCSVar(context, thisVar);
             stmtProcessor.setThis(csThisVar);
-            String thisValue = (csContr.isEmpty() || ContrUtil.isControllable(csContr.get(0))) ? ContrUtil.sTHIS : csContr.get(0);
-            CSObj csContrThis = ContrUtil.getObj(csThisVar, thisValue, heapModel, context, csManager);
+            CSObj csContrThis = ContrUtil.getObj(csThisVar, ContrUtil.sTHIS, heapModel, context, csManager);
             stmtProcessor.addPFGEdge(csContrThis, csThisVar, FlowKind.NEW_CONTR, cfg.getEntry().getLineNumber());
         }
         return newInitialFact();
@@ -98,6 +93,9 @@ public class SummaryAnalysis extends AbstractDataflowAnalysis<Stmt, ContrFact> {
 
     @Override
     public boolean transferNode(Stmt stmt, ContrFact in, ContrFact out) {
+        if (stmt.toString().contains("ectj.weaver.tools.cache.SimpleCache$StoreableCachingMap: java.lang.Object put(java.lang.Object,java.lang.Object)>[8@L193] r17 = invokespecial %this.writeToPath($r5, r1)")) {
+            System.out.println(1);
+        }
         ContrFact newIn = in.copy();
         stmtProcessor.setFact(newIn);
         stmtProcessor.process(stmt);
