@@ -1,5 +1,7 @@
 package pascal.taie.analysis.dataflow.analysis.methodsummary.plugin;
 
+import pascal.taie.language.classes.JMethod;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -21,5 +23,10 @@ public class CompositePlugin implements Plugin {
     @Override
     public void onFinish() {
         allPlugins.forEach(Plugin::onFinish);
+    }
+
+    @Override
+    public void onNewMethod(JMethod method) {
+        allPlugins.forEach(p -> p.onNewMethod(method));
     }
 }

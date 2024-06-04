@@ -93,9 +93,6 @@ public class SummaryAnalysis extends AbstractDataflowAnalysis<Stmt, ContrFact> {
 
     @Override
     public boolean transferNode(Stmt stmt, ContrFact in, ContrFact out) {
-        if (stmt.toString().contains("ectj.weaver.tools.cache.SimpleCache$StoreableCachingMap: java.lang.Object put(java.lang.Object,java.lang.Object)>[8@L193] r17 = invokespecial %this.writeToPath($r5, r1)")) {
-            System.out.println(1);
-        }
         ContrFact newIn = in.copy();
         stmtProcessor.setFact(newIn);
         stmtProcessor.process(stmt);
