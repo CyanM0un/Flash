@@ -725,6 +725,7 @@ public class StmtProcessor {
                 if (recType == null) break;
                 Set<JMethod> callees = World.get().filterMethods("<init>", recType, isFilterNonSerializable);
                 for (JMethod init : callees) {
+                    if (init.isPrivate()) continue;
                     List<String> edgeContr = new ArrayList<>();
                     edgeContr.add(csContr.get(0));
                     int pSize = init.getIR().getParams().size(); // 适应性PP
