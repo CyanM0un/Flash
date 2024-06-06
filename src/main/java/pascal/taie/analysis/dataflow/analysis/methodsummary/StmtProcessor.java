@@ -716,13 +716,14 @@ public class StmtProcessor {
     private void processBehavior(JMethod method, Invoke stmt, List<CSVar> callSiteVars, List<String> csContr) {
         Map<String, String> imitatedBehavior = method.getImitatedBehavior();
         String behavior = imitatedBehavior.get("jump");
+        boolean isFilterNonSerializable =  World.get().getOptions().isFilterNonSerializable();
         switch (behavior) {
             case "constructor" -> { // TODO 做一个类型的过滤以及数组参数的模拟
                 int idx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
                 Contr fromContr = getContr(callSiteVars.get(idx));
                 Type recType = fromContr != null ? fromContr.getOrigin().getType() : null;
                 if (recType == null) break;
-                Set<JMethod> callees = World.get().filterMethods("<init>", recType);
+                Set<JMethod> callees = World.get().filterMethods("<init>", recType, isFilterNonSerializable);
                 for (JMethod init : callees) {
                     List<String> edgeContr = new ArrayList<>();
                     edgeContr.add(csContr.get(0));
@@ -750,7 +751,7 @@ public class StmtProcessor {
                     List<String> edgeContr = new ArrayList<>();
                     edgeContr.add(csContr.get(ridx));
                     argContrs.forEach(argContr -> edgeContr.add(argContr.getValue()));
-                    Set<JMethod> callees = World.get().filterMethods(reg, recvType, argTypes); // for example getxxx
+                    Set<JMethod> callees = World.get().filterMethods(reg, recvType, argTypes, isFilterNonSerializable); // for example getxxx
                     logger.info("[+] possible callees size {}", callees.size());
                     for (JMethod callee : callees) {
                         csCallGraph.addEdge(getCallEdge(stmt, callee, edgeContr));
@@ -786,7 +787,7 @@ public class StmtProcessor {
                 CSVar toStringVar = callSiteVars.get(fromIdx);
                 Contr toStringContr = drivenMap.get(toStringVar);
                 Type recType = getContrType(toStringContr);
-                Set<JMethod> callees = World.get().filterMethods("toString", recType, new ArrayList<>());
+                Set<JMethod> callees = World.get().filterMethods("toString", recType, new ArrayList<>(), isFilterNonSerializable);
                 for (JMethod toString : callees) {
                     csCallGraph.addEdge(getCallEdge(stmt, toString, edgeContr));
                     addWL(toString);

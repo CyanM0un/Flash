@@ -226,14 +226,15 @@ public final class World extends AbstractResultHolder
                 .flatMap(j -> j.getDeclaredMethods().stream());
     }
 
-    public Set<JMethod> filterMethods(String name, Type type) {
+    public Set<JMethod> filterMethods(String name, Type type, boolean isFilterNonSerializable) {
         return allMethods()
                 .filter(m -> m.getName().equals(name) && !m.isAbstract() && !m.isPrivate())
                 .filter(m -> type != null ? typeSystem.isSubtype(type, m.getDeclaringClass().getType()) : true)
+                .filter(method -> isFilterNonSerializable ? method.getDeclaringClass().isSerializable() : true)
                 .collect(Collectors.toSet());
     }
 
-    public Set<JMethod> filterMethods(String nameReg, Type clsType, List<Type> argTypes) {
+    public Set<JMethod> filterMethods(String nameReg, Type clsType, List<Type> argTypes, boolean isFilterNonSerializable) {
         Pattern pattern = Pattern.compile(nameReg);
         return allMethods()
                 .filter(m -> pattern.matcher(m.getName()).find() && !m.isAbstract() && !m.isPrivate() && typeSystem.isSubtype(clsType, m.getDeclaringClass().getType()))
@@ -242,6 +243,7 @@ public final class World extends AbstractResultHolder
                     m.getIR().getParams().forEach(var -> paramTypes.add(var.getType()));
                     return typeSystem.allSubType(argTypes, paramTypes);
                 })
+                .filter(method -> isFilterNonSerializable ? method.getDeclaringClass().isSerializable() : true)
                 .collect(Collectors.toSet());
     }
 
