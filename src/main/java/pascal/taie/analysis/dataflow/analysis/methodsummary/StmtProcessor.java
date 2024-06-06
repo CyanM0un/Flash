@@ -317,7 +317,7 @@ public class StmtProcessor {
                 if (ref.hasImitatedBehavior()) processBehavior(ref, stmt, callSiteVars, csContr);
                 return null;
             }
-            callees.addAll(getCallees(stmt, base, csContr));
+            callees.addAll(getCallees(stmt, base, csContr, ref.getDeclaringClass().getType()));
             for (JMethod callee : callees) {
                 if (!isIgnored(callee)) {
                     csCallGraph.addEdge(getCallEdge(stmt, callee, csContr));
@@ -472,7 +472,7 @@ public class StmtProcessor {
         return new Edge<>(CallGraphs.getCallKind(callSite), csCallSite, csCallee, csContr, lineNumber);
     }
 
-    private Set<JMethod> getCallees(Invoke stmt, CSVar base, List<String> csContr) {
+    private Set<JMethod> getCallees(Invoke stmt, CSVar base, List<String> csContr, Type refType) {
         Set<JMethod> ret = new HashSet<>();
         if (base == null) {
             ret.add(CallGraphs.resolveCallee(null, stmt));
@@ -485,7 +485,7 @@ public class StmtProcessor {
                 if (chaTargets.size() <= 1) { // 不做过滤
                     ret.addAll(chaTargets);
                 } else {
-                    ret.addAll(filterCHA(chaTargets, baseFact.getType()));
+                    ret.addAll(filterCHA(chaTargets, baseFact.getType(), refType));
                     if (stmt.isInterface()
                             && ContrUtil.isCallSite(baseFact.getValue()) // 值为polluted的存在误报，但这样是否有漏报？
                             && !baseFact.isCasted()) {
@@ -684,7 +684,9 @@ public class StmtProcessor {
             CSVar from = csManager.getCSVar(context, fromVar);
             Contr fromContr = getContr(from);
             if (ContrUtil.isControllable(fromContr)) {
-                addPFGEdge(new TaintTransferEdge(from, to), new SpecialType(typeSystem.getType(transfer.type())), lineNumber);
+                String stype = transfer.type();
+                Type type = stype.equals("from") ? fromContr.getType() : typeSystem.getType(stype);
+                addPFGEdge(new TaintTransferEdge(from, to), new SpecialType(type), lineNumber);
             }
         });
     }
@@ -846,11 +848,12 @@ public class StmtProcessor {
         return !ref.toString().equals("<java.lang.reflect.Method: java.lang.Object invoke(java.lang.Object,java.lang.Object[])>");
     }
 
-    private Collection<? extends JMethod> filterCHA(Set<JMethod> methods, Type type) {
+    private Collection<? extends JMethod> filterCHA(Set<JMethod> methods, Type type, Type refType) {
         boolean isFilterNonSerializable = World.get().getOptions().isFilterNonSerializable();
+        boolean ignoredType = !typeSystem.isSubtype(refType, type); // 消除iterator的transfer副作用
         return methods.stream()
                 .filter(method -> isFilterNonSerializable ? method.getDeclaringClass().isSerializable() : true)
-                .filter(method -> typeSystem.isSubtype(type, method.getDeclaringClass().getType()))
+                .filter(method -> ignoredType || typeSystem.isSubtype(type, method.getDeclaringClass().getType()))
                 .filter(method -> !method.isPrivate())
                 .collect(Collectors.toSet());
     }
