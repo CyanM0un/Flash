@@ -140,15 +140,15 @@ public record PrioriKnowConfig(List<JMethod> sinks,
                         IndexRef from = toIndexRef(method, elem.get("from").asText());
                         IndexRef to = toIndexRef(method, elem.get("to").asText());
                         JsonNode typeNode = elem.get("type");
-                        Type type;
+                        String type;
                         if (typeNode != null) {
-                            type = typeSystem.getType(typeNode.asText());
+                            type = typeNode.asText();
                         } else {
                             Type varType = getMethodType(method, to.index());
                             type = switch (to.kind()) {
-                                case VAR -> varType;
-                                case ARRAY -> ((ArrayType) varType).elementType();
-                                case FIELD -> to.field().getType();
+                                case VAR -> varType.getName();
+                                case ARRAY -> ((ArrayType) varType).elementType().getName();
+                                case FIELD -> to.field().getType().getName();
                             };
                         }
                         method.addTransfer(new TaintTransfer(method, from, to, type));
@@ -191,11 +191,12 @@ public record PrioriKnowConfig(List<JMethod> sinks,
                                     String[] v = value.asText().split("->");
                                     String from = ContrUtil.int2String(InvokeUtils.toInt(v[0]));
                                     String to;
-                                    if (v[1].equals("result")) {
+                                    if (v[1].contains("result")) {
                                         to = "return";
-                                        from = from + "+null";
+                                        if (v[1].contains("\\+")) from = from + "+" + v[1].split("\\+")[1];
+                                        else from = from + "+null";
                                     } else {
-                                        to =ContrUtil.int2String(InvokeUtils.toInt(v[1]));
+                                        to = ContrUtil.int2String(InvokeUtils.toInt(v[1]));
                                     }
                                     method.setSummary(to, from);
                                 });

@@ -118,4 +118,7 @@ public class Edge<CallSite, Method> {
         return csContr;
     }
 
+    public Integer getLineNo() {
+        return lineNumber;
+    }
 }

@@ -28,10 +28,8 @@ public class ClassInitializer implements Plugin {
         if (method.isSource()) {
             initReadObject.add(clz);
         }
-        if (method.isStatic() || method.isConstructor()) {
-            initializeClass(clz);
-        }
-        initializeReadObject(clz);
+        if (!method.getName().equals("<clinit>")) initializeReadObject(clz); //  防止未初始化类即恢复对象
+        initializeClass(clz);
     }
 
     public void initializeClass(JClass cls) {

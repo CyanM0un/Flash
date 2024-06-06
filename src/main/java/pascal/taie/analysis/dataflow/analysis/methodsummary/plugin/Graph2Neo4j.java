@@ -43,7 +43,7 @@ public class Graph2Neo4j implements Plugin {
             CSVWriter edgeWriter = new CSVWriter(new FileWriter(relationship_path, false));
             String[] nodeHeader = {"signature:ID", "name", "isSource", "isSink", "className", "tc", ":LABEL"};
             nodeWriter.writeNext(nodeHeader);
-            String[] edgeHeader = {":START_ID", ":END_ID", ":TYPE" ,"PP"};
+            String[] edgeHeader = {":START_ID", ":END_ID", ":TYPE" ,"PP", "lineNo"};
             edgeWriter.writeNext(edgeHeader);
 
             Stream<Edge<CSCallSite, CSMethod>> edges = this.csCallGraph.edges();
@@ -68,7 +68,7 @@ public class Graph2Neo4j implements Plugin {
             JMethod caller = edge.getCallSite().getCallSite().getContainer();
             node2CSV(nodeWriter, callee);
             node2CSV(nodeWriter, caller);
-            edge2CSV(edgeWriter, caller.getSignature(), callee.getSignature(), edge.getCSIntContr());
+            edge2CSV(edgeWriter, caller.getSignature(), callee.getSignature(), edge.getCSIntContr(), edge.getLineNo());
         });
     }
 
@@ -87,12 +87,13 @@ public class Graph2Neo4j implements Plugin {
         }
     }
 
-    private void edge2CSV(CSVWriter edgeWriter, String caller, String callee, List<Integer> csIntContr) {
-        String line = String.format("%s#%s#%s#%s",
+    private void edge2CSV(CSVWriter edgeWriter, String caller, String callee, List<Integer> csIntContr, Integer lineNo) {
+        String line = String.format("%s#%s#%s#%s#%d",
                 caller,
                 callee,
                 "CALL",
-                csIntContr.toString());
+                csIntContr.toString(),
+                lineNo);
         edgeWriter.writeNext(line.split("#"));
     }
 

@@ -35,6 +35,7 @@ public class InvokeUtils {
         return switch (s.toLowerCase()) {
             case BASE_STR -> BASE;
             case RESULT_STR -> RESULT;
+            case "polluted" -> -2;
             default -> Integer.parseInt(s);
         };
     }
