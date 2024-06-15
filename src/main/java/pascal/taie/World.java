@@ -28,6 +28,8 @@ import pascal.taie.ir.IRBuilder;
 import pascal.taie.language.classes.ClassHierarchy;
 import pascal.taie.language.classes.JMethod;
 import pascal.taie.language.natives.NativeModel;
+import pascal.taie.language.type.ClassType;
+import pascal.taie.language.type.PrimitiveType;
 import pascal.taie.language.type.Type;
 import pascal.taie.language.type.TypeSystem;
 import pascal.taie.util.AbstractResultHolder;
@@ -230,7 +232,8 @@ public final class World extends AbstractResultHolder
         return allMethods()
                 .filter(m -> m.getName().equals(name) && !m.isAbstract() && !m.isPrivate())
                 .filter(m -> type != null ? typeSystem.isSubtype(type, m.getDeclaringClass().getType()) : true)
-                .filter(method -> isFilterNonSerializable ? method.getDeclaringClass().isSerializable() : true)
+                .filter(method -> isFilterNonSerializable ? method.getIR().getParams().stream().allMatch(v -> v.getType() instanceof PrimitiveType
+                        || (v.getType() instanceof ClassType ct && ct.getJClass().isSerializable())) : true)
                 .collect(Collectors.toSet());
     }
 

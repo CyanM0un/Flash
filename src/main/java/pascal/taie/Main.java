@@ -179,6 +179,7 @@ public class Main {
             superClz.setSerializable();
             setSuperSerializable(superClz);
         }
+        c.getInterfaces().forEach(JClass::setSerializable);
     }
 
     private static void executePlan(Plan plan) {
