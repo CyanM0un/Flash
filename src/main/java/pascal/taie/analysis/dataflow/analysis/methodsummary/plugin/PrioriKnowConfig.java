@@ -151,7 +151,9 @@ public record PrioriKnowConfig(List<JMethod> sinks,
                                 case FIELD -> to.field().getType().getName();
                             };
                         }
-                        method.addTransfer(new TaintTransfer(method, from, to, type));
+                        boolean isNewTransfer = method.getName().equals("<init>") ? true : false;
+                        TaintTransfer tts = new TaintTransfer(method, from, to, type, isNewTransfer);
+                        method.addTransfer(tts);
                         transfers.add(method);
                     } else {
                         logger.warn("Cannot find taint-transfer method '{}'", methodSig);

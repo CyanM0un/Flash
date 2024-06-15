@@ -637,6 +637,7 @@ public class StmtProcessor {
                                     Type type = t instanceof SpecialType st ? st.getType() : tte.target().getType();
                                     Contr contr = from.copy();
                                     contr.setType(type);
+                                    if (tte.isNewTransfer()) contr.setNew();
                                     pt.add(p, contr);
                                 }
                             });
@@ -686,7 +687,7 @@ public class StmtProcessor {
             if (ContrUtil.isControllable(fromContr)) {
                 String stype = transfer.type();
                 Type type = stype.equals("from") ? fromContr.getType() : typeSystem.getType(stype);
-                addPFGEdge(new TaintTransferEdge(from, to), new SpecialType(type), lineNumber);
+                addPFGEdge(new TaintTransferEdge(from, to, transfer.isNewTransfer()), new SpecialType(type), lineNumber);
             }
         });
     }
