@@ -219,10 +219,8 @@ public class StmtProcessor {
                     InstanceField iField = csManager.getInstanceField(base, field);
                     PointerFlowEdge edge = new PointerFlowEdge(FlowKind.INSTANCE_STORE, from, iField);
                     addPFGEdge(edge, Identity.get(), lineNumber);
-                    if (Objects.equals(curMethod, stackManger.getCurIfEndMethod())) {
-                        int ifEnd = stackManger.getIfEnd();
-                        if (ifEnd != -1) pointerFlowGraph.addIfRange(edge, ifEnd);
-                    }
+                    int ifEnd = Objects.equals(curMethod, stackManger.getCurIfEndMethod()) ? stackManger.getIfEnd() : lineNumber;
+                    pointerFlowGraph.addIfRange(edge, ifEnd);
                 }
             }
             return null;
