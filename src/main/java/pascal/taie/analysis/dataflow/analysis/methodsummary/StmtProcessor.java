@@ -391,7 +391,7 @@ public class StmtProcessor {
     }
 
     private boolean isIgnored(Type type) {
-        return type instanceof PrimitiveType || type instanceof NullType;
+        return type instanceof PrimitiveType || type instanceof NullType || (type instanceof ClassType ct && ct.getName().equals("java.lang.Short"));
     }
 
     private boolean isIgnored(JMethod method) {
