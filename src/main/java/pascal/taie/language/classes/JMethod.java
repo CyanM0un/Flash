@@ -26,6 +26,7 @@ import pascal.taie.World;
 import pascal.taie.analysis.dataflow.analysis.methodsummary.plugin.TaintTransfer;
 import pascal.taie.frontend.cache.CachedIRBuilder;
 import pascal.taie.ir.IR;
+import pascal.taie.ir.IRBuildHelper;
 import pascal.taie.ir.proginfo.MethodRef;
 import pascal.taie.language.annotation.Annotation;
 import pascal.taie.language.annotation.AnnotationHolder;
@@ -200,10 +201,9 @@ public class JMethod extends ClassMember {
 
     public IR getIR() {
         if (ir == null) {
-//            if (isAbstract()) {
-//                throw new AnalysisException("Abstract method " + this +
-//                        " has no method body");
-//            }
+            if (isAbstract()) {
+                return new IRBuildHelper(this).buildEmpty();
+            }
             if (isNative()) {
                 ir = World.get().getNativeModel().buildNativeIR(this);
             } else {

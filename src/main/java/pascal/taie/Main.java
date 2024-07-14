@@ -38,6 +38,7 @@ import pascal.taie.frontend.cache.CachedWorldBuilder;
 import pascal.taie.frontend.soot.SootClassLoader;
 import pascal.taie.frontend.soot.SootWorldBuilder;
 import pascal.taie.language.classes.JClass;
+import pascal.taie.language.classes.JMethod;
 import pascal.taie.util.Timer;
 import pascal.taie.util.collection.Lists;
 
@@ -163,7 +164,7 @@ public class Main {
         for (JClass sub : World.get().getClassHierarchy().getAllSubclassesOf(c)) {
             if (!sub.isSerializable()) {
                 sub.setSerializable();
-                if (sources.contains("serializable")) {
+                if (sources.contains("serializable") && !sub.equals(c)) {
                     c.getDeclaredMethods()
                             .stream()
                             .filter(m -> SootClassLoader.readSubSigList.contains(m.getSubsignature().toString()))

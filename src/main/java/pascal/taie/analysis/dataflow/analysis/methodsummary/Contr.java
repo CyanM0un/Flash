@@ -4,6 +4,8 @@ import pascal.taie.analysis.dataflow.analysis.methodsummary.Utils.ContrUtil;
 import pascal.taie.analysis.pta.core.cs.element.*;
 import pascal.taie.language.classes.JField;
 import pascal.taie.language.classes.Modifier;
+import pascal.taie.language.type.ArrayType;
+import pascal.taie.language.type.ClassType;
 import pascal.taie.language.type.Type;
 import pascal.taie.util.Strings;
 
@@ -18,6 +20,8 @@ public class Contr {
     private Type type;
 
     private boolean isTransient = false;
+
+    private boolean isSerializable = false;
 
     private boolean isNew = false;
 
@@ -37,14 +41,18 @@ public class Contr {
         this.type = pointer.getType();
         if (pointer instanceof CSVar var) {
             this.name = var.getVar().getName();
+            setSerializable(var.getType());
         } else if (pointer instanceof InstanceField iField) {
             this.name = iField.toString();
             setTransient(iField.getField());
+            setSerializable(iField.getField().getType());
         } else if (pointer instanceof ArrayIndex arrayVar) {
             this.name = arrayVar.toString();
+            if (arrayVar.getType() instanceof ArrayType at) setSerializable(at.elementType());
         } else if (pointer instanceof StaticField sField) {
             this.name = sField.toString();
             setTransient(sField.getField());
+            setSerializable(sField.getField().getType());
         }
     }
 
@@ -64,6 +72,14 @@ public class Contr {
 
     public boolean isTransient() {
         return this.isTransient;
+    }
+
+    public void setSerializable(Type type) {
+        if (ContrUtil.isSerializableType(type)) this.isSerializable = true;
+    }
+
+    public boolean isSerializable() {
+        return isSerializable;
     }
 
     public Type getType() {
@@ -123,6 +139,10 @@ public class Contr {
         this.constString = constString;
     }
 
+    public String getCS() {
+        return constString;
+    }
+
     public String getName() {
         return this.name;
     }
@@ -171,5 +191,4 @@ public class Contr {
                 type.equals(other.type) &&
                 value.equals(other.value);
     }
-
 }

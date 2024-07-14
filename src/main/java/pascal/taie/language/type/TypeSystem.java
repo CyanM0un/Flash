@@ -54,5 +54,5 @@ public interface TypeSystem extends Serializable {
 
     boolean isPrimitiveType(String typeName);
 
-    boolean allSubType(List<Type> argTypes, List<Type> paramTypes);
+    boolean allSubType(Type expandArg, List<Type> argTypes, List<Type> paramTypes);
 }

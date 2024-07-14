@@ -61,6 +61,10 @@ public class CSMethod extends AbstractCSElement {
         return method;
     }
 
+    public boolean containsEdge(Edge<CSCallSite, CSMethod> edge) {
+        return edges.contains(edge);
+    }
+
     public void addEdge(Edge<CSCallSite, CSMethod> edge) {
         // The caller has ensured that each edge added to CSMethod is unique
         edges.add(edge);

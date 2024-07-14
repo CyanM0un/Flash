@@ -83,7 +83,7 @@ public class SootClassLoader implements JClassLoader {
                 boolean isInvokeImpl = sootClass.implementsInterface("java.lang.reflect.InvocationHandler");
                 jclass.getDeclaredMethods().forEach(m -> {
                     if (sources.contains(m.getSignature()) ||
-                            (sources.contains("serializable") && readSubSigList.contains(m.getSubsignature().toString()) && isSerImpl)) {
+                            (sources.contains("serializable") && readSubSigList.contains(m.getSubsignature().toString()))) {
                         World.get().addGCEntry(m);
                     } else if (m.getSubsignature().toString().equals(invokeSubSig) && isInvokeImpl) {
                         World.get().addInvocationHandlerMethod(m);

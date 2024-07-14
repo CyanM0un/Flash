@@ -49,7 +49,7 @@ public class Graph2Neo4j implements Plugin {
             Stream<Edge<CSCallSite, CSMethod>> edges = this.csCallGraph.edges();
             graph2CSV(nodeWriter, edgeWriter, edges);
 
-            String command = "neo4j-admin database import full --nodes=import/nodes.csv --relationships=import/edges.csv --overwrite-destination neo4j";
+            String command = "neo4j-admin.bat database import full --nodes=import/nodes.csv --relationships=import/edges.csv --overwrite-destination neo4j";
 //            logger.info("[+] use {} to load graph to neo4j", command);
             ProcessBuilder process = new ProcessBuilder("cmd", "/c", command);
             process.directory(new File(db_path + "/bin"));
@@ -65,7 +65,7 @@ public class Graph2Neo4j implements Plugin {
     private void graph2CSV(CSVWriter nodeWriter, CSVWriter edgeWriter, Stream<Edge<CSCallSite, CSMethod>> edges) {
         edges.forEach(edge -> {
             JMethod callee = edge.getCallee().getMethod();
-            JMethod caller = edge.getCallSite().getCallSite().getContainer();
+            JMethod caller = CSCallGraph.getCaller(edge);
             node2CSV(nodeWriter, callee);
             node2CSV(nodeWriter, caller);
             edge2CSV(edgeWriter, caller.getSignature(), callee.getSignature(), edge.getCSIntContr(), edge.getLineNo());

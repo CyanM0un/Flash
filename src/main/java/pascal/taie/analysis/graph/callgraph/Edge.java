@@ -26,6 +26,7 @@ import pascal.taie.analysis.dataflow.analysis.methodsummary.Utils.ContrUtil;
 import pascal.taie.util.Hashes;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Represents call edges in the call graph.
@@ -39,6 +40,8 @@ public class Edge<CallSite, Method> {
 
     private final CallSite callSite;
 
+    private final Method caller;
+
     private final Method callee;
 
     private final int hashCode;
@@ -50,10 +53,21 @@ public class Edge<CallSite, Method> {
     public Edge(CallKind kind, CallSite callSite, Method callee, List<String> csContr, Integer lineNumber) {
         this.kind = kind;
         this.callSite = callSite;
+        this.caller = null;
         this.callee = callee;
         this.csContr = csContr;
         this.lineNumber = lineNumber;
         hashCode = Hashes.hash(kind, callSite, callee, csContr);
+    }
+
+    public Edge(Method caller, Method callee, List<String> csContr, Integer lineNumber) {
+        this.kind = null;
+        this.callSite = null;
+        this.caller = caller;
+        this.callee = callee;
+        this.csContr = csContr;
+        this.lineNumber = lineNumber;
+        hashCode = Hashes.hash(caller, callee, csContr);
     }
 
     /**
@@ -86,6 +100,10 @@ public class Edge<CallSite, Method> {
         return callee;
     }
 
+    public Method getCaller() {
+        return caller;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {
@@ -95,9 +113,10 @@ public class Edge<CallSite, Method> {
             return false;
         }
         Edge<?, ?> edge = (Edge<?, ?>) o;
-        return kind == edge.kind &&
-                callSite.equals(edge.callSite) &&
-                callee.equals(edge.callee);
+        return Objects.equals(kind, edge.kind)
+                && Objects.equals(callSite, edge.callSite)
+                && Objects.equals(caller, edge.caller)
+                && Objects.equals(callee, edge.callee);
     }
 
     @Override

@@ -33,8 +33,8 @@ import static pascal.taie.analysis.dataflow.analysis.methodsummary.plugin.IndexR
 
 public record PrioriKnowConfig(List<JMethod> sinks,
                                List<JMethod> transfers,
-                               List<JMethod> ignores,
-                               List<Object> imitates) {
+                               List<JMethod> imitates,
+                               List<Object> ignores) {
 
     private static final Logger logger = LogManager.getLogger(PrioriKnowConfig.class);
 
@@ -187,6 +187,7 @@ public record PrioriKnowConfig(List<JMethod> sinks,
                                 }
                             }
                             case "polluteRec" -> method.setImitatedBehavior("polluteRec", "");
+                            case "replace" -> method.setImitatedBehavior("action", "replace");
                             case "summary" -> {
                                 ArrayNode summaryValue = (ArrayNode) elem.get("value");
                                 summaryValue.forEach(value -> {

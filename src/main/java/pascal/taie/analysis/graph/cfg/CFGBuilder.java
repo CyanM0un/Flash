@@ -150,6 +150,7 @@ public class CFGBuilder extends MethodAnalysis<CFG<Stmt>> {
     private static void buildExceptionalEdges(StmtCFG cfg) {
         IR ir = cfg.getIR();
         ThrowResult throwResult = ir.getResult(ThrowAnalysis.ID);
+        if (throwResult == null) return;
         CatchResult catchResult = CatchAnalysis.analyze(ir, throwResult);
         ir.forEach(stmt -> {
             // build edges for implicit exceptions

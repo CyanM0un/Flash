@@ -26,12 +26,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import pascal.taie.World;
 import pascal.taie.ir.IRPrinter;
-import pascal.taie.ir.exp.InvokeDynamic;
-import pascal.taie.ir.exp.InvokeExp;
-import pascal.taie.ir.exp.InvokeInterface;
-import pascal.taie.ir.exp.InvokeSpecial;
-import pascal.taie.ir.exp.InvokeStatic;
-import pascal.taie.ir.exp.InvokeVirtual;
+import pascal.taie.ir.exp.*;
 import pascal.taie.ir.proginfo.MemberRef;
 import pascal.taie.ir.proginfo.MethodRef;
 import pascal.taie.ir.stmt.Invoke;
@@ -52,12 +47,10 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
-import java.util.Comparator;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Static utility methods about call graph.
@@ -109,12 +102,23 @@ public final class CallGraphs {
         JClass cls = methodRef.getDeclaringClass();
         Set<JMethod> callees = resolveTable.get(cls, methodRef);
         if (callees == null) {
-            callees = hierarchy.getAllSubclassesOf(cls)
-                    .stream()
-                    .filter(Predicate.not(JClass::isAbstract))
-                    .map(c -> hierarchy.dispatch(c, methodRef))
-                    .filter(Objects::nonNull) // filter out null callees
-                    .collect(Collectors.toUnmodifiableSet());
+            boolean byCHA = true; // 处理this调用
+            if (callSite.getInvokeExp() instanceof InvokeInstanceExp instanceExp
+                    && instanceExp.getBase().getName().equals("%this")) {
+                JMethod callee = hierarchy.dispatch(methodRef.getDeclaringClass().getType(), methodRef);
+                if (callee != null) {
+                    byCHA = false;
+                    callees = Stream.of(callee).collect(Collectors.toUnmodifiableSet());
+                }
+            }
+            if (byCHA) {
+                callees = hierarchy.getAllSubclassesOf(cls)
+                        .stream()
+                        .filter(Predicate.not(JClass::isAbstract))
+                        .map(c -> hierarchy.dispatch(c, methodRef))
+                        .filter(Objects::nonNull) // filter out null callees
+                        .collect(Collectors.toUnmodifiableSet());
+            }
             resolveTable.put(cls, methodRef, callees);
         }
         return callees;

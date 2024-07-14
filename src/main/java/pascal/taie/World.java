@@ -22,8 +22,10 @@
 
 package pascal.taie;
 
+import pascal.taie.analysis.dataflow.analysis.methodsummary.Utils.ContrUtil;
 import pascal.taie.config.Options;
 import pascal.taie.frontend.cache.CachedIRBuilder;
+import pascal.taie.frontend.soot.SootClassLoader;
 import pascal.taie.ir.IRBuilder;
 import pascal.taie.language.classes.ClassHierarchy;
 import pascal.taie.language.classes.JMethod;
@@ -205,7 +207,7 @@ public final class World extends AbstractResultHolder
     public void addGCEntry(JMethod m) {
         if (!GCEntries.contains(m)) {
             GCEntries.add(m);
-            m.setSource();
+            if (SootClassLoader.readSubSigList.contains(m.getSubsignature().toString()) || getOptions().getSources().contains(m.toString())) m.setSource();
         }
     }
 
@@ -228,25 +230,31 @@ public final class World extends AbstractResultHolder
                 .flatMap(j -> j.getDeclaredMethods().stream());
     }
 
-    public Set<JMethod> filterMethods(String name, Type type, boolean isFilterNonSerializable) {
+    public Set<JMethod> filterMethods(String name, Type type, boolean recSer, boolean paramSer) {
         return allMethods()
-                .filter(m -> m.getName().equals(name) && !m.isAbstract() && !m.isPrivate())
-                .filter(m -> type != null ? typeSystem.isSubtype(type, m.getDeclaringClass().getType()) : true)
-                .filter(method -> isFilterNonSerializable ? method.getIR().getParams().stream().allMatch(v -> v.getType() instanceof PrimitiveType
-                        || (v.getType() instanceof ClassType ct && ct.getJClass().isSerializable())) : true)
+                .filter(m -> m.getName().equals(name)
+                        && !m.isAbstract()
+                        && !m.isPrivate()
+                        && (type == null || typeSystem.isSubtype(type, m.getDeclaringClass().getType()))
+                        && (recSer || m.getDeclaringClass().isSerializable())
+                        && (!paramSer || m.getIR().getParams().stream().allMatch(p -> ContrUtil.isSerializableType(p.getType()))))
                 .collect(Collectors.toSet());
     }
 
-    public Set<JMethod> filterMethods(String nameReg, Type clsType, List<Type> argTypes, boolean isFilterNonSerializable) {
+    public Set<JMethod> filterMethods(String nameReg, Type clsType, List<Type> argTypes, boolean recSer, boolean paramSer, Type expandArgType) {
+        boolean hasStar = nameReg.contains("*");
         Pattern pattern = Pattern.compile(nameReg);
+
         return allMethods()
-                .filter(m -> pattern.matcher(m.getName()).find() && !m.isAbstract() && !m.isPrivate() && typeSystem.isSubtype(clsType, m.getDeclaringClass().getType()))
-                .filter(m-> {
-                    List<Type> paramTypes = new ArrayList<>();
-                    m.getIR().getParams().forEach(var -> paramTypes.add(var.getType()));
-                    return typeSystem.allSubType(argTypes, paramTypes);
-                })
-                .filter(method -> isFilterNonSerializable ? method.getDeclaringClass().isSerializable() : true)
+                .filter(m -> hasStar ? pattern.matcher(m.getName()).find() : m.getName().equals(nameReg))
+                .filter(m -> !m.isAbstract()
+                        && !m.isPrivate()
+                        && typeSystem.isSubtype(clsType, m.getDeclaringClass().getType())
+                        && (recSer || m.getDeclaringClass().isSerializable())
+                        && (!paramSer || m.getIR().getParams().stream().allMatch(p -> ContrUtil.isSerializableType(p.getType()))))
+                .filter(m -> typeSystem.allSubType(expandArgType, argTypes, m.getIR().getParams().stream()
+                        .map(p -> p.getType())
+                        .collect(Collectors.toList())))
                 .collect(Collectors.toSet());
     }
 

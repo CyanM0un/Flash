@@ -73,6 +73,7 @@ public class SummaryAnalysisDriver extends MethodAnalysis<DataflowResult<Stmt, C
     public DataflowResult<Stmt, ContrFact> analyze(IR ir) {
         JMethod method = ir.getMethod();
         CFG<Stmt> cfg = ir.getResult(CFGBuilder.ID);
+        if (cfg == null) return null; // 跳过abstract方法分析
         plugin.onNewMethod(method);
         stackManger.pushMethod(method);
         csCallGraph.addReachableMethod(csManager.getCSMethod(emptyContext, method));

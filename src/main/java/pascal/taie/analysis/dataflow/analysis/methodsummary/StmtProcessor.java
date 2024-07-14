@@ -27,8 +27,10 @@ import pascal.taie.util.InvokeUtils;
 import pascal.taie.util.Strings;
 import pascal.taie.util.collection.Sets;
 
+import java.lang.reflect.Method;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class StmtProcessor {
 
@@ -219,7 +221,7 @@ public class StmtProcessor {
                     InstanceField iField = csManager.getInstanceField(base, field);
                     PointerFlowEdge edge = new PointerFlowEdge(FlowKind.INSTANCE_STORE, from, iField);
                     addPFGEdge(edge, Identity.get(), lineNumber);
-                    int ifEnd = Objects.equals(curMethod, stackManger.getCurIfEndMethod()) ? stackManger.getIfEnd() : lineNumber;
+                    int ifEnd = Objects.equals(curMethod, stackManger.getCurIfEndMethod()) ? stackManger.getIfEnd() : -1;
                     pointerFlowGraph.addIfRange(edge, ifEnd);
                 }
             }
@@ -316,19 +318,27 @@ public class StmtProcessor {
                 return null;
             }
             callees.addAll(getCallees(stmt, base, csContr, ref.getDeclaringClass().getType()));
+            boolean linkCallee = callees.size() > 1; // 避免重复边
+            if (linkCallee) {
+                csCallGraph.addReachableMethod(csManager.getCSMethod(context, ref));
+                csCallGraph.addEdge(getCallEdge(stmt, ref, csContr));
+            }
             for (JMethod callee : callees) {
-                if (!isIgnored(callee)) {
+                if (isIgnored(callee)) continue;
+                if (linkCallee) {
+                    csCallGraph.addEdge(getCallEdge(ref, callee, csContr));
+                } else {
                     csCallGraph.addEdge(getCallEdge(stmt, callee, csContr));
-                    if (callee.hasImitatedBehavior()) {
-                        processBehavior(callee, stmt, callSiteVars, csContr);
-                        continue;
-                    }
-                    if (!(callee.hasSummary()
-                            || callee.isSink()
-                            || stackManger.containsMethod(callee)
-                            || callee.isNative())) {
-                        AnalysisManager.runMethodAnalysis(callee);
-                    }
+                }
+                if (callee.hasImitatedBehavior()) {
+                    processBehavior(callee, stmt, callSiteVars, csContr);
+                    continue;
+                }
+                if (!(callee.hasSummary()
+                        || callee.isSink()
+                        || stackManger.containsMethod(callee)
+                        || callee.isNative())) {
+                    AnalysisManager.runMethodAnalysis(callee);
                 }
             }
             // 处理返回值以及对参数的影响
@@ -397,7 +407,7 @@ public class StmtProcessor {
     private boolean isIgnored(JMethod method) {
         return method == null ||
                 method.isIgnored() ||
-                method.getDeclaringClass().getName().equals("java.lang.String") && isIgnored(method.getReturnType());
+                (method.getDeclaringClass().getName().equals("java.lang.String") && isIgnored(method.getReturnType()) && !method.getSummaryMap().isEmpty());
     }
 
     private boolean isIgnoredCallSite(List<String> csContr, JMethod ref) {
@@ -425,7 +435,11 @@ public class StmtProcessor {
 
     private String getContrValue(Pointer p) {
         Contr contr = getContr(p);
-        return contr != null ? contr.getValue() : ContrUtil.sNOT_POLLUTED;
+        return getContrValue(contr);
+    }
+
+    private String getContrValue(Contr c) {
+        return c != null ? c.getValue() : ContrUtil.sNOT_POLLUTED;
     }
 
     private Contr getContr(Pointer p) {
@@ -470,6 +484,12 @@ public class StmtProcessor {
         return new Edge<>(CallGraphs.getCallKind(callSite), csCallSite, csCallee, csContr, lineNumber);
     }
 
+    private Edge getCallEdge(JMethod caller, JMethod callee, List<String> csContr) {
+        CSMethod csCaller = csManager.getCSMethod(context, caller);
+        CSMethod csCallee = csManager.getCSMethod(context, callee);
+        return new Edge<>(csCaller, csCallee, csContr, lineNumber);
+    }
+
     private Set<JMethod> getCallees(Invoke stmt, CSVar base, List<String> csContr, Type refType) {
         Set<JMethod> ret = new HashSet<>();
         if (base == null) {
@@ -492,7 +512,7 @@ public class StmtProcessor {
                 }
             }
         } else {
-            ret.addAll(CallGraphs.resolveCalleesOf(stmt));
+            ret.addAll(filterCHA(CallGraphs.resolveCalleesOf(stmt), refType, refType));
         }
         return ret;
     }
@@ -547,7 +567,7 @@ public class StmtProcessor {
             }
         } else {
             ret = Contr.newInstance(origin);
-            if (!ret.isTransient()) ret.setValue(contrValue);
+            if (!ret.isTransient() && ret.isSerializable()) ret.setValue(contrValue);
         }
         return ret;
     }
@@ -561,7 +581,7 @@ public class StmtProcessor {
         workList.add(pointer);
         Set<Pointer> marked = Sets.newSet();
 
-        while (!workList.isEmpty()) {
+           while (!workList.isEmpty()) {
             Pointer p = workList.poll();
             if (drivenMap.contains(p)) {
                 pt.add(p, drivenMap.get(p));
@@ -614,7 +634,7 @@ public class StmtProcessor {
                         }
                         if (!processAlias(source, matchEdges, pt, pfe.getLineNumber())) {
                             Contr baseContr = getContr(base);
-                            if (ContrUtil.isControllable(baseContr) && !contr.isTransient()) {
+                            if (ContrUtil.isControllable(baseContr) && !contr.isTransient() && contr.isSerializable()) {
                                 if (fieldName.equals("this$0")) contr.updateValue(baseContr.getValue()); // Class.this的一种访问形式
                                 else contr.updateValue(baseContr.getValue() + "-" +fieldName);
                             }
@@ -631,7 +651,7 @@ public class StmtProcessor {
                         if (pfe instanceof TaintTransferEdge tte) {
                             tte.getTransfers().forEach(t -> {
                                 Contr from = getContr(pfe.source());
-                                if (ContrUtil.isControllable(from)) {
+                                if (from != null && (ContrUtil.isControllable(from) || from.getCS() != null)) {
                                     Type type = t instanceof SpecialType st ? st.getType() : tte.target().getType();
                                     Contr contr = from.copy();
                                     contr.setType(type);
@@ -682,7 +702,7 @@ public class StmtProcessor {
             CSVar to = csManager.getCSVar(context, toVar);
             CSVar from = csManager.getCSVar(context, fromVar);
             Contr fromContr = getContr(from);
-            if (ContrUtil.isControllable(fromContr)) {
+            if (fromContr != null && (ContrUtil.isControllable(fromContr) || fromContr.getCS() != null)) {
                 String stype = transfer.type();
                 Type type = stype.equals("from") ? fromContr.getType() : typeSystem.getType(stype);
                 addPFGEdge(new TaintTransferEdge(from, to, transfer.isNewTransfer()), new SpecialType(type), lineNumber);
@@ -714,15 +734,15 @@ public class StmtProcessor {
 
     private void processBehavior(JMethod method, Invoke stmt, List<CSVar> callSiteVars, List<String> csContr) {
         Map<String, String> imitatedBehavior = method.getImitatedBehavior();
-        String behavior = imitatedBehavior.get("jump");
         boolean isFilterNonSerializable =  World.get().getOptions().isFilterNonSerializable();
+        String behavior = imitatedBehavior.containsKey("jump") ? imitatedBehavior.get("jump") : imitatedBehavior.get("action");
         switch (behavior) {
-            case "constructor" -> { // TODO 做一个类型的过滤以及数组参数的模拟
+            case "constructor" -> {
                 int idx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
                 Contr fromContr = getContr(callSiteVars.get(idx));
                 Type recType = fromContr != null ? fromContr.getOrigin().getType() : null;
                 if (recType == null) break;
-                Set<JMethod> callees = World.get().filterMethods("<init>", recType, isFilterNonSerializable);
+                Set<JMethod> callees = World.get().filterMethods("<init>", recType, ContrUtil.isControllableParam(fromContr), isFilterNonSerializable);
                 for (JMethod init : callees) {
                     if (init.isPrivate()) continue;
                     List<String> edgeContr = new ArrayList<>();
@@ -738,27 +758,32 @@ public class StmtProcessor {
                 int idx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
                 int ridx = InvokeUtils.toInt(imitatedBehavior.get("recIdx")) + 1;
                 int pidx = InvokeUtils.toInt(imitatedBehavior.get("paramIdx")) + 1;
-                CSVar name = callSiteVars.get(idx);
-                String contrValue = getContrValue(name);
-                String reg = ContrUtil.convert2Reg(contrValue);
-                CSVar param = callSiteVars.get(pidx);
-                ArrayList<Contr> argContrs = drivenMap.contains(param) ? drivenMap.get(param).getArrayElements() : new ArrayList<>();
+                Contr nameContr = getContr(callSiteVars.get(idx));
+                if (nameContr == null) return;
+                String nameReg = ContrUtil.convert2Reg(getContrValue(nameContr));
+                Contr paramContr = getContr(callSiteVars.get(pidx));
+                boolean expandArg = false;
+                Type expandArgType = null;
+                ArrayList<Contr> argContrs = paramContr != null ? paramContr.getArrayElements() : new ArrayList<>();
+                if (argContrs.isEmpty() && ContrUtil.isControllable(paramContr)) {
+                    expandArg = true;
+                    expandArgType = getContrType(paramContr);
+                }
                 List<Type> argTypes = argContrs.stream().map(Contr::getType).toList();
-                CSVar recv = callSiteVars.get(ridx);
-                Type recvType = drivenMap.contains(recv) ? drivenMap.get(recv).getType() : null;
-                if (recvType == null) break;
-                if (reg != null && !recvType.getName().equals("java.lang.Object") && !argTypes.isEmpty()) {
+                Contr recvContr = getContr(callSiteVars.get(ridx));
+                if (recvContr == null) return;
+                Set<JMethod> callees = World.get().filterMethods(nameReg, recvContr.getType(), argTypes, ContrUtil.isControllableParam(recvContr), isFilterNonSerializable, expandArgType); // for example getxxx
+                if (callees.size() > 1) logger.info("[+] possible reflection target size {} from {}", callees.size(), curMethod);
+                for (JMethod callee : callees) {
                     List<String> edgeContr = new ArrayList<>();
                     edgeContr.add(csContr.get(ridx));
-                    argContrs.forEach(argContr -> edgeContr.add(argContr.getValue()));
-                    Set<JMethod> callees = World.get().filterMethods(reg, recvType, argTypes, isFilterNonSerializable); // for example getxxx
-                    logger.info("[+] possible callees size {}", callees.size());
-                    for (JMethod callee : callees) {
-                        csCallGraph.addEdge(getCallEdge(stmt, callee, edgeContr));
-                        addWL(callee);
+                    if (expandArg) {
+                        callee.getIR().getParams().forEach(p -> edgeContr.add(paramContr.getValue()));
+                    } else {
+                        argContrs.forEach(argContr -> edgeContr.add(argContr.getValue()));
                     }
-                } else if (Objects.equals(reg, ".*") && ContrUtil.isControllable(drivenMap.get(recv)) && ContrUtil.isControllable(drivenMap.get(param))) {
-                    csCallGraph.addEdge(getCallEdge(stmt, method, csContr));
+                    csCallGraph.addEdge(getCallEdge(stmt, callee, edgeContr));
+                    addWL(callee);
                 }
             }
             case "get" -> {
@@ -787,10 +812,31 @@ public class StmtProcessor {
                 CSVar toStringVar = callSiteVars.get(fromIdx);
                 Contr toStringContr = drivenMap.get(toStringVar);
                 Type recType = getContrType(toStringContr);
-                Set<JMethod> callees = World.get().filterMethods("toString", recType, new ArrayList<>(), isFilterNonSerializable);
+                Set<JMethod> callees = World.get().filterMethods("toString", recType, new ArrayList<>(), ContrUtil.isControllableParam(toStringContr), isFilterNonSerializable, null);
                 for (JMethod toString : callees) {
                     csCallGraph.addEdge(getCallEdge(stmt, toString, edgeContr));
                     addWL(toString);
+                }
+            }
+            case "replace" -> {
+                if (ContrUtil.isControllable(csContr.get(0))
+                        || csContr.get(0).equals(ContrUtil.sNOT_POLLUTED)
+                        || csContr.subList(1, 2).stream().allMatch(s -> ContrUtil.isControllable(s))) return;
+                try {
+                    Class c = Class.forName(method.getDeclaringClass().getName());
+                    Class[] paramTypes = new Class[2];
+                    for (int i = 0; i < method.getParamCount(); i++) {
+                        paramTypes[i] = Class.forName(method.getParamType(i).getName());
+                    }
+                    Method rep = c.getDeclaredMethod(method.getName(), paramTypes);
+                    String s = csContr.get(0);
+                    String replacedValue = (String) rep.invoke(s, ContrUtil.convert2Reg(csContr.get(1)), csContr.get(2));
+                    CSVar base = callSiteVars.get(0);
+                    Contr replacedContr = getContr(base);
+                    replacedContr.setValue(replacedValue);
+                    updateContr(base, replacedContr);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
                 }
             }
         }

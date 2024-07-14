@@ -93,12 +93,6 @@ public class SummaryAnalysis extends AbstractDataflowAnalysis<Stmt, ContrFact> {
 
     @Override
     public boolean transferNode(Stmt stmt, ContrFact in, ContrFact out) {
-        if (stmt.toString().contains("un.org.apache.xalan.internal.xsltc.trax.TemplatesImpl: com.sun.org.apache.xalan.internal.xsltc.Translet getTransletInstance()>[9@L387] $r5 = invokevirtual $r4.newInstance()")) {
-            System.out.println(2);
-        }
-//        if (stmt.toString().contains("s.<com.sun.org.apache.xalan.internal.xsltc.trax.TemplatesImpl: java.lang.Class[] _class> = $r5")) {
-//            System.out.println(3);
-//        }
         ContrFact newIn = in.copy();
         stmtProcessor.setFact(newIn);
         stmtProcessor.process(stmt);

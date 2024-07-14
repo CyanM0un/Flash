@@ -11,6 +11,9 @@ import pascal.taie.analysis.pta.core.cs.element.Pointer;
 import pascal.taie.analysis.pta.core.heap.Descriptor;
 import pascal.taie.analysis.pta.core.heap.HeapModel;
 import pascal.taie.analysis.pta.core.heap.Obj;
+import pascal.taie.language.type.ArrayType;
+import pascal.taie.language.type.ClassType;
+import pascal.taie.language.type.Type;
 import pascal.taie.util.Strings;
 
 import java.util.ArrayList;
@@ -77,7 +80,11 @@ public class ContrUtil {
     }
 
     public static boolean isControllableParam(Contr contr) {
-        return string2Int(contr.getValue()) > iTHIS;
+        return isControllableParam(contr.getValue());
+    }
+
+    public static boolean isControllableParam(String value) {
+        return string2Int(value) > iTHIS;
     }
 
     public static boolean isCallSite(String value) {
@@ -101,7 +108,7 @@ public class ContrUtil {
         } else if (!v.equals(sNOT_POLLUTED)) {
             return v;
         } else {
-            return null;
+            return "";
         }
     }
 
@@ -109,5 +116,11 @@ public class ContrUtil {
         ContrAlloc alloc = new ContrAlloc(p, value);
         Obj obj = heapModel.getMockObj(Descriptor.CONTR_DESC, alloc, p.getType());
         return csManager.getCSObj(context, obj);
+    }
+
+    public static boolean isSerializableType(Type type) {
+        if (type instanceof ClassType ct) return ct.getJClass().isSerializable();
+        else if (type instanceof ArrayType at && at.elementType() instanceof ClassType et) return et.getJClass().isSerializable();
+        else return false;
     }
 }

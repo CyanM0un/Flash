@@ -212,10 +212,16 @@ public class TypeSystemImpl implements TypeSystem {
     }
 
     @Override
-    public boolean allSubType(List<Type> superTypes, List<Type> subTypes) {
-        if (superTypes.size() != subTypes.size()) return false;
-        for (int i = 0; i < superTypes.size(); i++) {
-            if (!isSubtype(superTypes.get(i), subTypes.get(i))) return false;
+    public boolean allSubType(Type expandArg, List<Type> superTypes, List<Type> subTypes) {
+        if (expandArg != null) {
+            for (int i = 0; i < subTypes.size(); i++) {
+                if (!isSubtype(expandArg, subTypes.get(i))) return false;
+            }
+        } else {
+            if (superTypes.size() != subTypes.size()) return false;
+            for (int i = 0; i < superTypes.size(); i++) {
+                if (!isSubtype(superTypes.get(i), subTypes.get(i))) return false;
+            }
         }
         return true;
     }

@@ -36,6 +36,7 @@ import pascal.taie.util.collection.Views;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -67,6 +68,14 @@ public class CSCallGraph extends AbstractCallGraph<CSCallSite, CSMethod> {
         return reachableMethods.add(csMethod);
     }
 
+    public static JMethod getCaller(Edge<CSCallSite, CSMethod> edge) {
+        if (edge.getCallSite() == null) {
+            return edge.getCaller().getMethod();
+        } else {
+            return edge.getCallSite().getCallSite().getContainer();
+        }
+    }
+
     /**
      * Adds a new call graph edge to this call graph.
      *
@@ -74,12 +83,22 @@ public class CSCallGraph extends AbstractCallGraph<CSCallSite, CSMethod> {
      * @return true if the call graph changed as a result of the call,
      * otherwise false.
      */
-    public boolean addEdge(Edge<CSCallSite, CSMethod> edge) {
-        if (edge.getCallSite().addEdge(edge)) {
-            edge.getCallee().addEdge(edge);
-            return true;
+    public void addEdge(Edge<CSCallSite, CSMethod> edge) {
+        if (Objects.equals(getCaller(edge), edge.getCallee().getMethod())) return; // 对于gc检测应该是没有影响的
+        Set<Edge<CSCallSite, CSMethod>> edges = edge.getCallee().getEdges();
+
+        if (!edges.isEmpty()) {
+            for (Edge<CSCallSite, CSMethod> eEdge : edges) {
+                if (Objects.equals(eEdge.getCSIntContr(), edge.getCSIntContr())
+                        && Objects.equals(getCaller(eEdge), getCaller(edge))) {
+                    return;
+                }
+            }
+        }
+        if (edge.getCallSite() == null) {
+            if (!edge.getCallee().containsEdge(edge)) edge.getCallee().addEdge(edge);
         } else {
-            return false;
+            if (edge.getCallSite().addEdge(edge)) edge.getCallee().addEdge(edge);
         }
     }
 
@@ -129,9 +148,7 @@ public class CSCallGraph extends AbstractCallGraph<CSCallSite, CSMethod> {
 
     @Override
     public Stream<Edge<CSCallSite, CSMethod>> edges() {
-        return reachableMethods.stream()
-                .flatMap(this::callSitesIn)
-                .flatMap(this::edgesOutOf);
+        return reachableMethods.stream().flatMap(this::edgesInTo);
     }
 
     @Override
