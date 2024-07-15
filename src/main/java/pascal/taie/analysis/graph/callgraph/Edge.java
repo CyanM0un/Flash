@@ -116,7 +116,8 @@ public class Edge<CallSite, Method> {
         return Objects.equals(kind, edge.kind)
                 && Objects.equals(callSite, edge.callSite)
                 && Objects.equals(caller, edge.caller)
-                && Objects.equals(callee, edge.callee);
+                && Objects.equals(callee, edge.callee)
+                && Objects.equals(getCSIntContr(), edge.getCSIntContr());
     }
 
     @Override

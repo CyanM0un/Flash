@@ -680,9 +680,12 @@ public class StmtProcessor {
             Pointer matchTarget = matchEdge.target();
             if (same(source, matchTarget)) {
                 int ifEnd = pointerFlowGraph.getIfRange(matchEdge);
-                if (ifEnd != -1 && lineNumber >= ifEnd) continue;
+                JMethod targetMethod = getPointerMethod(matchTarget);
+                if ((ifEnd != -1 && lineNumber >= ifEnd)
+                        || targetMethod == null
+                        || targetMethod.getName().equals("<init>")) continue;
                 pt.add(source, findPointsTo(matchSource).getMergedContr());
-                if (!Objects.equals(getPointerMethod(source), getPointerMethod(matchTarget)) // 如果来源变量不属于当前方法，则参数来源可能不一致
+                if (!Objects.equals(getPointerMethod(source), targetMethod) // 如果来源变量不属于当前方法，则参数来源可能不一致
                         && !pt.isEmpty()
                         && ContrUtil.isControllableParam(pt.getMergedContr())) {
                     pt.setValue(ContrUtil.sPOLLUTED);
