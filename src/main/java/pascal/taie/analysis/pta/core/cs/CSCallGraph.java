@@ -69,11 +69,7 @@ public class CSCallGraph extends AbstractCallGraph<CSCallSite, CSMethod> {
     }
 
     public static JMethod getCaller(Edge<CSCallSite, CSMethod> edge) {
-        if (edge.getCallSite() == null) {
-            return edge.getCaller().getMethod();
-        } else {
-            return edge.getCallSite().getCallSite().getContainer();
-        }
+        return edge.getCallSite().getCallSite().getContainer();
     }
 
     /**
@@ -95,11 +91,7 @@ public class CSCallGraph extends AbstractCallGraph<CSCallSite, CSMethod> {
                 }
             }
         }
-        if (edge.getCallSite() == null) {
-            if (!edge.getCallee().containsEdge(edge)) edge.getCallee().addEdge(edge);
-        } else {
-            if (edge.getCallSite().addEdge(edge)) edge.getCallee().addEdge(edge);
-        }
+        if (edge.getCallSite().addEdge(edge)) edge.getCallee().addEdge(edge);
     }
 
     @Override
@@ -148,7 +140,9 @@ public class CSCallGraph extends AbstractCallGraph<CSCallSite, CSMethod> {
 
     @Override
     public Stream<Edge<CSCallSite, CSMethod>> edges() {
-        return reachableMethods.stream().flatMap(this::edgesInTo);
+        return reachableMethods.stream()
+                .flatMap(this::callSitesIn)
+                .flatMap(this::edgesOutOf);
     }
 
     @Override

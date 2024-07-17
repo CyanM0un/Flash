@@ -318,18 +318,9 @@ public class StmtProcessor {
                 return null;
             }
             callees.addAll(getCallees(stmt, base, csContr, ref.getDeclaringClass().getType()));
-            boolean linkCallee = callees.size() > 1; // 避免重复边
-            if (linkCallee) {
-                csCallGraph.addReachableMethod(csManager.getCSMethod(context, ref));
-                csCallGraph.addEdge(getCallEdge(stmt, ref, csContr));
-            }
             for (JMethod callee : callees) {
                 if (isIgnored(callee)) continue;
-                if (linkCallee) {
-                    csCallGraph.addEdge(getCallEdge(ref, callee, csContr));
-                } else {
-                    csCallGraph.addEdge(getCallEdge(stmt, callee, csContr));
-                }
+                csCallGraph.addEdge(getCallEdge(stmt, callee, csContr));
                 if (callee.hasImitatedBehavior()) {
                     processBehavior(callee, stmt, callSiteVars, csContr);
                     continue;
@@ -484,12 +475,6 @@ public class StmtProcessor {
         return new Edge<>(CallGraphs.getCallKind(callSite), csCallSite, csCallee, csContr, lineNumber);
     }
 
-    private Edge getCallEdge(JMethod caller, JMethod callee, List<String> csContr) {
-        CSMethod csCaller = csManager.getCSMethod(context, caller);
-        CSMethod csCallee = csManager.getCSMethod(context, callee);
-        return new Edge<>(csCaller, csCallee, csContr, lineNumber);
-    }
-
     private Set<JMethod> getCallees(Invoke stmt, CSVar base, List<String> csContr, Type refType) {
         Set<JMethod> ret = new HashSet<>();
         if (base == null) {
@@ -609,6 +594,7 @@ public class StmtProcessor {
                             pfe.getTransfers().forEach(transfer -> { // 转换类型
                                 if (transfer instanceof SpecialType st) {
                                     Contr contr = from.copy();
+                                    contr.setCasted();
                                     if (typeSystem.isSubtype(contr.getType(), st.getType())) contr.setType(st.getType());
                                     pt.add(p, contr);
                                 }
