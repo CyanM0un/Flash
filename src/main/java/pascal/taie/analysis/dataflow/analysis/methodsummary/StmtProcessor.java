@@ -497,7 +497,7 @@ public class StmtProcessor {
                 }
             }
         } else {
-            ret.addAll(filterCHA(CallGraphs.resolveCalleesOf(stmt), refType, refType));
+            ret.addAll(CallGraphs.resolveCalleesOf(stmt));
         }
         return ret;
     }

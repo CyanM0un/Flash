@@ -13,6 +13,7 @@ import pascal.taie.analysis.pta.core.heap.HeapModel;
 import pascal.taie.analysis.pta.core.heap.Obj;
 import pascal.taie.language.type.ArrayType;
 import pascal.taie.language.type.ClassType;
+import pascal.taie.language.type.PrimitiveType;
 import pascal.taie.language.type.Type;
 import pascal.taie.util.Strings;
 
@@ -119,8 +120,15 @@ public class ContrUtil {
     }
 
     public static boolean isSerializableType(Type type) {
-        if (type instanceof ClassType ct) return ct.getJClass().isSerializable();
-        else if (type instanceof ArrayType at && at.elementType() instanceof ClassType et) return et.getJClass().isSerializable();
-        else return false;
+        if (type instanceof ClassType ct) {
+            return ct.getJClass().isSerializable();
+        } else if (type instanceof ArrayType at) {
+            if (at.elementType() instanceof ClassType et) return et.getJClass().isSerializable();
+            else return isSerializableType(at.elementType());
+        } else if (type instanceof PrimitiveType) {
+            return true;
+        } else {
+            return false;
+        }
     }
 }
