@@ -264,12 +264,30 @@ public class Options implements Serializable {
     }
 
     @JsonProperty
+    @Option(names = {"-go", "--GC_OUT"},
+            description = "gadget chains output")
+    private String GC_OUT;
+
+    public String getGC_OUT() {
+        return GC_OUT;
+    }
+
+    @JsonProperty
     @Option(names = {"-fns", "--filterNonSerializable"},
             description = "filter method by isSerializable")
     private boolean filterNonSerializable;
 
     public boolean isFilterNonSerializable() {
         return filterNonSerializable;
+    }
+
+    @JsonProperty
+    @Option(names = {"-ml", "--GC_MAX_LEN"},
+            description = "the max length of a gadget chain")
+    private int GC_MAX_LEN;
+
+    public int getGC_MAX_LEN() {
+        return GC_MAX_LEN;
     }
 
     @JsonProperty
@@ -530,7 +548,9 @@ public class Options implements Serializable {
                 ", nativeModel=" + nativeModel +
                 ", planFile=" + planFile +
                 ", sources=" + sources +
-                ", filterNonSerializable" + filterNonSerializable +
+                ", GC_OUT=" + GC_OUT +
+                ", filterNonSerializable=" + filterNonSerializable +
+                ", GC_MAX_LEN=" + GC_MAX_LEN +
                 ", analyses=" + analyses +
                 ", onlyGenPlan=" + onlyGenPlan +
                 ", keepResult=" + keepResult +

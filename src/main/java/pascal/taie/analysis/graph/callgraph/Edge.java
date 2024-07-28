@@ -109,7 +109,7 @@ public class Edge<CallSite, Method> {
 
     @Override
     public String toString() {
-        return "[" + getInfo() + "]" + callSite + " -> " + callee;
+        return "[" + getInfo() + "]" + callSite + "-" + getCSIntContr() + "->" + callee;
     }
 
     public List<Integer> getCSIntContr() {

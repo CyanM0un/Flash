@@ -59,14 +59,14 @@ public class SummaryAnalysisDriver extends MethodAnalysis<DataflowResult<Stmt, C
         plugin.addPlugin(
                 new AnalysisTimer(),
                 new ClassInitializer(),
-                new PrioriKnow(options.getString("priori-knowledge")),
-                new Graph2Neo4j(csCallGraph, options.getString("neo4j-dbpath"))
+                new PrioriKnow(options.getString("priori-knowledge"))
         );
         plugin.onStart();
     }
 
     public void finish() {
         plugin.onFinish();
+        stackManger.count();
     }
 
     @Override
@@ -81,6 +81,7 @@ public class SummaryAnalysisDriver extends MethodAnalysis<DataflowResult<Stmt, C
         DataflowResult<Stmt, ContrFact> ret = solver.solve(analysis);
         analysis.complementSummary();
         stackManger.popMethod();
+        if (!method.hasSummary()) method.setSummary("return", "null");
         return ret;
     }
 

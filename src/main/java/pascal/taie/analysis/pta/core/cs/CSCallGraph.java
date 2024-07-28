@@ -72,6 +72,10 @@ public class CSCallGraph extends AbstractCallGraph<CSCallSite, CSMethod> {
         return edge.getCallSite().getCallSite().getContainer();
     }
 
+    public static JMethod getCallee(Edge<CSCallSite, CSMethod> edge) {
+        return ((CSMethod) edge.getCallee()).getMethod();
+    }
+
     /**
      * Adds a new call graph edge to this call graph.
      *
@@ -79,19 +83,24 @@ public class CSCallGraph extends AbstractCallGraph<CSCallSite, CSMethod> {
      * @return true if the call graph changed as a result of the call,
      * otherwise false.
      */
-    public void addEdge(Edge<CSCallSite, CSMethod> edge) {
-        if (Objects.equals(getCaller(edge), edge.getCallee().getMethod())) return; // 对于gc检测应该是没有影响的
+    public boolean addEdge(Edge<CSCallSite, CSMethod> edge) {
+        if (Objects.equals(getCaller(edge), edge.getCallee().getMethod())) return false; // 对于gc检测应该是没有影响的
         Set<Edge<CSCallSite, CSMethod>> edges = edge.getCallee().getEdges();
 
         if (!edges.isEmpty()) {
             for (Edge<CSCallSite, CSMethod> eEdge : edges) {
                 if (Objects.equals(eEdge.getCSIntContr(), edge.getCSIntContr())
                         && Objects.equals(getCaller(eEdge), getCaller(edge))) {
-                    return;
+                    return false;
                 }
             }
         }
-        if (edge.getCallSite().addEdge(edge)) edge.getCallee().addEdge(edge);
+        if (edge.getCallSite().addEdge(edge)) {
+            edge.getCallee().addEdge(edge);
+            return true;
+        } else {
+            return false;
+        }
     }
 
     @Override

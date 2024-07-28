@@ -73,4 +73,10 @@ public final class Lists {
         set.addAll(list2);
         return List.copyOf(set);
     }
+
+    public static void clearList(List list, int idx, int times) {
+        for (int i = idx; i < times; i++) {
+            list.remove(idx);
+        }
+    }
 }

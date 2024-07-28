@@ -27,14 +27,15 @@ import pascal.taie.config.Options;
 import pascal.taie.frontend.cache.CachedIRBuilder;
 import pascal.taie.frontend.soot.SootClassLoader;
 import pascal.taie.ir.IRBuilder;
+import pascal.taie.ir.exp.Var;
 import pascal.taie.language.classes.ClassHierarchy;
 import pascal.taie.language.classes.JMethod;
 import pascal.taie.language.natives.NativeModel;
 import pascal.taie.language.type.ClassType;
-import pascal.taie.language.type.PrimitiveType;
 import pascal.taie.language.type.Type;
 import pascal.taie.language.type.TypeSystem;
 import pascal.taie.util.AbstractResultHolder;
+import pascal.taie.util.collection.Sets;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -230,14 +231,26 @@ public final class World extends AbstractResultHolder
                 .flatMap(j -> j.getDeclaredMethods().stream());
     }
 
-    public Set<JMethod> filterMethods(String name, Type type, boolean recSer, boolean paramSer) {
+    public Set<JMethod> filterMethods(String name, String clzName, List<Type> argTypes, boolean recSer, boolean paramSer) {
+        boolean hasStar = clzName.contains("*");
+        Pattern pattern = hasStar ? Pattern.compile(clzName) : null;
+        Type clsType = null;
+        if (!hasStar) {
+            clsType = typeSystem.getType(clzName);
+            if (clsType == null || (clsType instanceof ClassType ct && ct.getJClass() == null)) return Sets.newSet();
+        }
+
+        Type finalClsType = clsType;
         return allMethods()
+                .filter(m -> hasStar ? pattern.matcher(m.getDeclaringClass().getName()).find() : typeSystem.isSubtype(finalClsType, m.getDeclaringClass().getType()))
                 .filter(m -> m.getName().equals(name)
                         && !m.isAbstract()
                         && !m.isPrivate()
-                        && (type == null || typeSystem.isSubtype(type, m.getDeclaringClass().getType()))
                         && (recSer || m.getDeclaringClass().isSerializable())
                         && (!paramSer || m.getIR().getParams().stream().allMatch(p -> ContrUtil.isSerializableType(p.getType()))))
+                .filter(m -> argTypes.isEmpty() || typeSystem.allSubType(null, argTypes, m.getIR().getParams().stream()
+                        .map(Var::getType)
+                        .collect(Collectors.toList())))
                 .collect(Collectors.toSet());
     }
 
@@ -253,7 +266,7 @@ public final class World extends AbstractResultHolder
                         && (recSer || m.getDeclaringClass().isSerializable())
                         && (!paramSer || m.getIR().getParams().stream().allMatch(p -> ContrUtil.isSerializableType(p.getType()))))
                 .filter(m -> typeSystem.allSubType(expandArgType, argTypes, m.getIR().getParams().stream()
-                        .map(p -> p.getType())
+                        .map(Var::getType)
                         .collect(Collectors.toList())))
                 .collect(Collectors.toSet());
     }

@@ -14,6 +14,7 @@ import pascal.taie.analysis.graph.flowgraph.FlowKind;
 import pascal.taie.analysis.pta.core.cs.CSCallGraph;
 import pascal.taie.analysis.pta.core.cs.context.Context;
 import pascal.taie.analysis.pta.core.cs.element.*;
+import pascal.taie.analysis.pta.core.heap.ConstantObj;
 import pascal.taie.analysis.pta.core.heap.HeapModel;
 import pascal.taie.analysis.pta.core.heap.MockObj;
 import pascal.taie.analysis.pta.core.heap.Obj;
@@ -30,7 +31,6 @@ import pascal.taie.util.collection.Sets;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 public class StmtProcessor {
 
@@ -120,8 +120,14 @@ public class StmtProcessor {
         varsToReFind(edge.target(), new HashSet<>());
     }
 
-    private void addWL(JMethod method) {
-        if (!isIgnored(method)) AnalysisManager.addWL(method);
+    private void addWL(Invoke stmt, JMethod callee, List<String> edgeContr) {
+        if (!isIgnored(callee)
+                && !(callee.isTransfer() || callee.hasImitatedBehavior())) {
+            Edge callEdge = getCallEdge(stmt, callee, edgeContr);
+            boolean inStack = stackManger.containsMethod(callee);
+            if (csCallGraph.addEdge(callEdge)) stackManger.pushCallEdge(callEdge, inStack);
+            if (!inStack) AnalysisManager.runMethodAnalysis(callee);
+        }
     }
 
     private void varsToReFind(Pointer p, HashSet<Pointer> visited) { // drivenMap会缓存结果，如果缓存的变量新增加了指向边，则需要重新查询
@@ -155,6 +161,19 @@ public class StmtProcessor {
             addPFGEdge(from, to, FlowKind.NEW, lineNumber);
             if (rvalue instanceof NewMultiArray) {
 //                logger.info("[TODO] handle NewMultiArray"); // TODO
+            }
+            return null;
+        }
+
+        @Override
+        public Void visit(AssignLiteral stmt) {
+            Literal literal = stmt.getRValue();
+            Type type = literal.getType();
+            if (type instanceof ClassType) {
+                // here we only generate objects of ClassType
+                Obj obj = heapModel.getConstantObj((ReferenceLiteral) literal);
+                CSVar to = csManager.getCSVar(context, stmt.getLValue());
+                addPFGEdge(csManager.getCSObj(context, obj), to, FlowKind.NEW, lineNumber);
             }
             return null;
         }
@@ -312,25 +331,17 @@ public class StmtProcessor {
             csContr = getCallSiteContr(callSiteVars);
             if (isIgnoredCallSite(csContr, ref)) return null;
             processReceiver(ref, base, csContr);
+            if (ref.hasImitatedBehavior()) {
+                processBehavior(ref, stmt, callSiteVars, csContr, base);
+                return null;
+            }
             if (ref.isSink()) {
-                if (checkRequiredType(ref, callSiteVars, csContr)) csCallGraph.addEdge(getCallEdge(stmt, ref, csContr));
-                if (ref.hasImitatedBehavior()) processBehavior(ref, stmt, callSiteVars, csContr);
+                stackManger.recordGC(getCallEdge(stmt, ref, csContr), ref);
                 return null;
             }
             callees.addAll(getCallees(stmt, base, csContr, ref.getDeclaringClass().getType()));
             for (JMethod callee : callees) {
-                if (isIgnored(callee)) continue;
-                csCallGraph.addEdge(getCallEdge(stmt, callee, csContr));
-                if (callee.hasImitatedBehavior()) {
-                    processBehavior(callee, stmt, callSiteVars, csContr);
-                    continue;
-                }
-                if (!(callee.hasSummary()
-                        || callee.isSink()
-                        || stackManger.containsMethod(callee)
-                        || callee.isNative())) {
-                    AnalysisManager.runMethodAnalysis(callee);
-                }
+                addWL(stmt, callee, csContr);
             }
             // 处理返回值以及对参数的影响
             Var ret = stmt.getResult();
@@ -538,7 +549,7 @@ public class StmtProcessor {
                 contrValue = "null";
             } else if (drivenMap.contains(origin)) {
                 repalce = true;
-                contrValue = value.replace("param-" + paramIdx, drivenMap.get(origin).getValue());
+                contrValue = value.replace("param-" + (paramIdx - 1), drivenMap.get(origin).getValue());
             } else {
                 contrValue = "null";
             }
@@ -580,6 +591,8 @@ public class StmtProcessor {
                         newContr.setType(obj.getType());
                         if (obj instanceof MockObj mockObj && mockObj.getDescriptor().string().equals("Controllable")) {
                             newContr.setValue(((ContrAlloc) mockObj.getAllocation()).contr());
+                        } else if (obj instanceof ConstantObj co && co.getAllocation() instanceof ClassLiteral cl) {
+                            newContr.setType(cl.getTypeValue());
                         } else {
                             String newType = "new " + obj.getType();
                             newContr.setValue(newType);
@@ -700,135 +713,150 @@ public class StmtProcessor {
     }
 
     private void processReceiver(JMethod ref, CSVar base, List<String> csContr) { // 处理receiver可控性传递
+        Contr baseContr = drivenMap.get(base);
+        if (baseContr == null) return;
         if (ref.isConstructor()) {
             for (int i = 1; i < csContr.size(); i++) {
                 if (ContrUtil.isControllable(csContr.get(i))) {
-                    drivenMap.get(base).setValue(ContrUtil.sPOLLUTED);
+                    baseContr.setValue(ContrUtil.sPOLLUTED);
                     break;
-                }
-            }
-        } else if (ref.hasImitatedBehavior()) {
-            Map behavior = ref.getImitatedBehavior();
-            if (behavior.containsKey("polluteRec")) {
-                List<String> copy = new ArrayList<>();
-                copy.addAll(csContr);
-                copy.remove(0);
-                if (copy.stream().allMatch(i -> ContrUtil.isControllable(i))
-                        && drivenMap.contains(base)) {
-                    drivenMap.get(base).setValue(ContrUtil.sPOLLUTED);
                 }
             }
         }
     }
 
-    private void processBehavior(JMethod method, Invoke stmt, List<CSVar> callSiteVars, List<String> csContr) {
+    private void processBehavior(JMethod method, Invoke stmt, List<CSVar> callSiteVars, List<String> csContr, CSVar base) {
         Map<String, String> imitatedBehavior = method.getImitatedBehavior();
         boolean isFilterNonSerializable =  World.get().getOptions().isFilterNonSerializable();
-        String behavior = imitatedBehavior.containsKey("jump") ? imitatedBehavior.get("jump") : imitatedBehavior.get("action");
-        switch (behavior) {
-            case "constructor" -> {
-                int idx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
-                Contr fromContr = getContr(callSiteVars.get(idx));
-                Type recType = fromContr != null ? fromContr.getOrigin().getType() : null;
-                if (recType == null) break;
-                Set<JMethod> callees = World.get().filterMethods("<init>", recType, ContrUtil.isControllableParam(fromContr), isFilterNonSerializable);
-                for (JMethod init : callees) {
-                    if (init.isPrivate()) continue;
-                    List<String> edgeContr = new ArrayList<>();
-                    edgeContr.add(csContr.get(0));
-                    int pSize = init.getIR().getParams().size(); // 适应性PP
-                    List<String> copied = Collections.nCopies(pSize, csContr.get(1));
-                    edgeContr.addAll(copied);
-                    csCallGraph.addEdge(getCallEdge(stmt, init, edgeContr));
-                    addWL(init); // 并没有继续递归分析，防止栈溢出
-                }
-            }
-            case "inference" -> {
-                int idx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
-                int ridx = InvokeUtils.toInt(imitatedBehavior.get("recIdx")) + 1;
-                int pidx = InvokeUtils.toInt(imitatedBehavior.get("paramIdx")) + 1;
-                Contr nameContr = getContr(callSiteVars.get(idx));
-                if (nameContr == null) return;
-                String nameReg = ContrUtil.convert2Reg(getContrValue(nameContr));
-                Contr paramContr = getContr(callSiteVars.get(pidx));
-                boolean expandArg = false;
-                Type expandArgType = null;
-                ArrayList<Contr> argContrs = paramContr != null ? paramContr.getArrayElements() : new ArrayList<>();
-                if (argContrs.isEmpty() && ContrUtil.isControllable(paramContr)) {
-                    expandArg = true;
-                    expandArgType = getContrType(paramContr);
-                }
-                List<Type> argTypes = argContrs.stream().map(Contr::getType).toList();
-                Contr recvContr = getContr(callSiteVars.get(ridx));
-                if (recvContr == null) return;
-                Set<JMethod> callees = World.get().filterMethods(nameReg, recvContr.getType(), argTypes, ContrUtil.isControllableParam(recvContr), isFilterNonSerializable, expandArgType); // for example getxxx
-                if (callees.size() > 1) logger.info("[+] possible reflection target size {} from {}", callees.size(), curMethod);
-                for (JMethod callee : callees) {
-                    List<String> edgeContr = new ArrayList<>();
-                    edgeContr.add(csContr.get(ridx));
-                    if (expandArg) {
-                        callee.getIR().getParams().forEach(p -> edgeContr.add(paramContr.getValue()));
+        if (imitatedBehavior.containsKey("jump")) {
+            String target = imitatedBehavior.get("jump");
+            switch (target) {
+                case "constructor" -> {
+                    int idx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
+                    Contr fromContr = getContr(callSiteVars.get(idx));
+                    if (fromContr == null) return;
+                    String clzName;
+                    Set<JMethod> callees;
+                    if (fromContr.getType().getName().equals("java.lang.String")) { // Class#forName
+                        clzName = ContrUtil.convert2Reg(fromContr.getValue());
+                        callees = World.get().filterMethods("<clinit>", clzName, new ArrayList<>(), ContrUtil.isControllableParam(fromContr), isFilterNonSerializable);
                     } else {
-                        argContrs.forEach(argContr -> edgeContr.add(argContr.getValue()));
+                        Contr paramContr = getContr(callSiteVars.get(1));
+                        ArrayList<Contr> argContrs = paramContr != null ? paramContr.getArrayElements() : new ArrayList<>();
+                        List<Type> argTypes = argContrs.stream().map(Contr::getType).toList();
+                        clzName = fromContr.getOrigin().getType().getName();
+                        if (clzName.equals("java.lang.Class")) clzName = "java.lang.Object";
+                        callees = World.get().filterMethods("<init>", clzName, argTypes, ContrUtil.isControllableParam(fromContr), isFilterNonSerializable);
                     }
-                    csCallGraph.addEdge(getCallEdge(stmt, callee, edgeContr));
-                    addWL(callee);
-                }
-            }
-            case "get" -> {
-                int getIdx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
-                if (ContrUtil.isControllable(csContr.get(getIdx)) && stmt.getResult() != null) {
-                    Pointer p = csManager.getCSVar(context, stmt.getResult());
-                    Contr retContr = getOrAddContr(p);
-                    retContr.setValue("get+polluted");
-                    updateContr(p, retContr);
-                }
-            }
-            case "set" -> {
-                int setIdx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
-                if (ContrUtil.isControllable(csContr.get(setIdx)) && stmt.getResult() != null) {
-                    Pointer p = csManager.getCSVar(context, stmt.getResult());
-                    Contr retContr = getOrAddContr(p);
-                    retContr.setValue("set+polluted");
-                    updateContr(p, retContr);
-                }
-            }
-            case "toString" -> {
-                List<String> edgeContr = new ArrayList<>();
-                int fromIdx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
-                if (!ContrUtil.isControllable(csContr.get(fromIdx))) break;
-                edgeContr.add(csContr.get(fromIdx));
-                CSVar toStringVar = callSiteVars.get(fromIdx);
-                Contr toStringContr = drivenMap.get(toStringVar);
-                Type recType = getContrType(toStringContr);
-                Set<JMethod> callees = World.get().filterMethods("toString", recType, new ArrayList<>(), ContrUtil.isControllableParam(toStringContr), isFilterNonSerializable, null);
-                for (JMethod toString : callees) {
-                    csCallGraph.addEdge(getCallEdge(stmt, toString, edgeContr));
-                    addWL(toString);
-                }
-            }
-            case "replace" -> {
-                if (ContrUtil.isControllable(csContr.get(0))
-                        || csContr.get(0).equals(ContrUtil.sNOT_POLLUTED)
-                        || csContr.subList(1, 2).stream().allMatch(s -> ContrUtil.isControllable(s))) return;
-                try {
-                    Class c = Class.forName(method.getDeclaringClass().getName());
-                    Class[] paramTypes = new Class[2];
-                    for (int i = 0; i < method.getParamCount(); i++) {
-                        paramTypes[i] = Class.forName(method.getParamType(i).getName());
+                    for (JMethod init : callees) {
+                        if (init.isPrivate()) continue;
+                        List<String> edgeContr = new ArrayList<>();
+                        edgeContr.add(csContr.get(0));
+                        int pSize = init.getIR().getParams().size(); // 适应性PP
+                        List<String> copied = Collections.nCopies(pSize, csContr.get(1));
+                        edgeContr.addAll(copied);
+                        addWL(stmt, init, edgeContr);
                     }
-                    Method rep = c.getDeclaredMethod(method.getName(), paramTypes);
-                    String s = csContr.get(0);
-                    String replacedValue = (String) rep.invoke(s, ContrUtil.convert2Reg(csContr.get(1)), csContr.get(2));
-                    CSVar base = callSiteVars.get(0);
-                    Contr replacedContr = getContr(base);
-                    replacedContr.setValue(replacedValue);
-                    updateContr(base, replacedContr);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
+                }
+                case "inference" -> {
+                    int idx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
+                    int ridx = InvokeUtils.toInt(imitatedBehavior.get("recIdx")) + 1;
+                    int pidx = InvokeUtils.toInt(imitatedBehavior.get("paramIdx")) + 1;
+                    Contr nameContr = getContr(callSiteVars.get(idx));
+                    if (nameContr == null) return;
+                    String nameReg = ContrUtil.convert2Reg(getContrValue(nameContr));
+                    Contr paramContr = getContr(callSiteVars.get(pidx));
+                    boolean expandArg = false;
+                    Type expandArgType = null;
+                    ArrayList<Contr> argContrs = paramContr != null ? paramContr.getArrayElements() : new ArrayList<>();
+                    if (argContrs.isEmpty() && ContrUtil.isControllable(paramContr)) {
+                        expandArg = true;
+                        expandArgType = getContrType(paramContr);
+                    }
+                    List<Type> argTypes = argContrs.stream().map(Contr::getType).toList();
+                    Contr recvContr = getContr(callSiteVars.get(ridx));
+                    if (recvContr == null) return;
+                    Set<JMethod> callees = World.get().filterMethods(nameReg, recvContr.getType(), argTypes, ContrUtil.isControllableParam(recvContr), isFilterNonSerializable, expandArgType); // for example getxxx
+                    if (callees.size() > 1) logger.info("[+] possible reflection target size {} from {}", callees.size(), curMethod);
+                    for (JMethod callee : callees) {
+                        List<String> edgeContr = new ArrayList<>();
+                        edgeContr.add(csContr.get(ridx));
+                        if (expandArg) {
+                            callee.getIR().getParams().forEach(p -> edgeContr.add(paramContr.getValue()));
+                        } else {
+                            argContrs.forEach(argContr -> edgeContr.add(argContr.getValue()));
+                        }
+                        addWL(stmt, callee, edgeContr);
+                    }
+                }
+                case "get" -> {
+                    int getIdx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
+                    if (ContrUtil.isControllable(csContr.get(getIdx)) && stmt.getResult() != null) {
+                        Pointer p = csManager.getCSVar(context, stmt.getResult());
+                        Contr retContr = getOrAddContr(p);
+                        retContr.setValue("get+polluted");
+                        updateContr(p, retContr);
+                    }
+                }
+                case "set" -> {
+                    int setIdx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
+                    if (ContrUtil.isControllable(csContr.get(setIdx)) && stmt.getResult() != null) {
+                        Pointer p = csManager.getCSVar(context, stmt.getResult());
+                        Contr retContr = getOrAddContr(p);
+                        retContr.setValue("set+polluted");
+                        updateContr(p, retContr);
+                    }
+                }
+                case "toString" -> {
+                    List<String> edgeContr = new ArrayList<>();
+                    int fromIdx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
+                    if (!ContrUtil.isControllable(csContr.get(fromIdx))) break;
+                    edgeContr.add(csContr.get(fromIdx));
+                    CSVar toStringVar = callSiteVars.get(fromIdx);
+                    Contr toStringContr = drivenMap.get(toStringVar);
+                    Type recType = getContrType(toStringContr);
+                    Set<JMethod> callees = World.get().filterMethods("toString", recType, new ArrayList<>(), ContrUtil.isControllableParam(toStringContr), isFilterNonSerializable, null);
+                    for (JMethod toString : callees) {
+                        addWL(stmt, toString, edgeContr);
+                    }
+                }
+            }
+        } else if (imitatedBehavior.containsKey("action")) {
+            String behavior = imitatedBehavior.get("action");
+            switch (behavior) {
+                case "replace" -> {
+                    if (ContrUtil.isControllable(csContr.get(0))
+                            || csContr.get(0).equals(ContrUtil.sNOT_POLLUTED)
+                            || csContr.subList(1, 2).stream().allMatch(s -> ContrUtil.isControllable(s)))
+                        return;
+                    try {
+                        Class c = Class.forName(method.getDeclaringClass().getName());
+                        Class[] paramTypes = new Class[2];
+                        for (int i = 0; i < method.getParamCount(); i++) {
+                            paramTypes[i] = Class.forName(method.getParamType(i).getName());
+                        }
+                        Method rep = c.getDeclaredMethod(method.getName(), paramTypes);
+                        String s = csContr.get(0);
+                        String replacedValue = (String) rep.invoke(s, ContrUtil.convert2Reg(csContr.get(1)), csContr.get(2));
+                        Contr replacedContr = getContr(base);
+                        replacedContr.setValue(replacedValue);
+                        updateContr(base, replacedContr);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+                case "polluteRec" -> {
+                    List<String> copy = new ArrayList<>();
+                    copy.addAll(csContr);
+                    copy.remove(0);
+                    if (copy.stream().allMatch(i -> ContrUtil.isControllable(i))
+                            && drivenMap.contains(base)) {
+                        drivenMap.get(base).setValue(ContrUtil.sPOLLUTED);
+                    }
                 }
             }
         }
+
     }
 
     private void processDynamicProxy(Invoke stmt, List<String> csContr) {
@@ -845,8 +873,7 @@ public class StmtProcessor {
                 }
             }
             if (invoke.size() == 3) invoke.add(ContrUtil.sNOT_POLLUTED);
-            csCallGraph.addEdge(getCallEdge(stmt, invoker, invoke));
-            AnalysisManager.addWL(invoker);
+            addWL(stmt, invoker, invoke);
         }
     }
 

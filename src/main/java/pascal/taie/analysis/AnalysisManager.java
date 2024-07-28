@@ -124,6 +124,7 @@ public class AnalysisManager {
     }
 
     public static void runMethodAnalysis(JMethod m) {
+        if (m.isSink() || m.hasSummary() || m.isIgnored()) return;
         methodAnalyses.forEach(analysis -> {
             IR ir = m.getIR();
             Object result = analysis.analyze(ir);
