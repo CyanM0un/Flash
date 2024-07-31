@@ -145,6 +145,7 @@ public class StmtProcessor {
         this.lineNumber = stmt.getLineNumber();
         stmt.accept(visitor);
         if (stackManger.isInIf() && stackManger.isIfEnd(stmt)) stackManger.popIf(stmt);
+        if (stackManger.containsInstanceOfEnd(stmt)) stackManger.removeInstanceOfEnd(stmt);
     }
 
     private class Visitor implements StmtVisitor<Void> {
@@ -206,11 +207,12 @@ public class StmtProcessor {
             if (!isIgnored(lValue.getType())) {
                 JField field = stmt.getFieldRef().resolve();
                 if (field == null) {
-                    logger.info("[ERR] can not resolve {}", stmt);
                     return null;
                 }
                 CSVar to = csManager.getCSVar(context, stmt.getLValue());
                 if (stmt.isStatic()) {
+                    // 先确保类加载器
+                    AnalysisManager.runMethodAnalysis(field.getDeclaringClass().getClinit());
                     StaticField sfield = csManager.getStaticField(field);
                     addPFGEdge(sfield, to, FlowKind.STATIC_LOAD, lineNumber);
                 } else {
@@ -228,7 +230,6 @@ public class StmtProcessor {
             if (!isIgnored(rValue.getType())) {
                 JField field = stmt.getFieldRef().resolve();
                 if (field == null) {
-                    logger.info("[ERR] can not resolve {}", stmt);
                     return null;
                 }
                 CSVar from = csManager.getCSVar(context, rValue);
@@ -281,6 +282,23 @@ public class StmtProcessor {
             Contr ifContr = getContr(ifVar);
             if (ContrUtil.isControllable(ifContr)) {
                 stackManger.pushIf(stmt.getTarget(), curMethod);
+            } else if (stackManger.containsInstanceOfRet(ifVar)) {
+                Pointer p = stackManger.removeInstanceOfRet(ifVar);
+                Var cmpVar = stmt.getCondition().getOperand2();
+                if (cmpVar.isConst() && cmpVar.getConstValue() instanceof IntLiteral i && i.getValue() == 0) {
+                    stackManger.putInstanceOfEnd(stmt.getTarget(), p);
+                }
+            }
+            return null;
+        }
+
+        @Override
+        public Void visit(InstanceOf stmt) {
+            InstanceOfExp exp = stmt.getRValue();
+            Contr checkedContr = getContr(csManager.getCSVar(context, exp.getValue()));
+            if (ContrUtil.isControllable(checkedContr)) {
+                CSVar retVar = csManager.getCSVar(context, stmt.getLValue());
+                stackManger.putInstanceOfInfo(retVar, checkedContr.getOrigin(), exp.getCheckedType());
             }
             return null;
         }
@@ -329,7 +347,7 @@ public class StmtProcessor {
             }
             callSiteVars.add(0, base);
             csContr = getCallSiteContr(callSiteVars);
-            if (isIgnoredCallSite(csContr, ref)) return null;
+            if (isIgnoredCallSite(csContr, ref, stmt.getContainer().getDeclaringClass().getType())) return null;
             processReceiver(ref, base, csContr);
             if (ref.hasImitatedBehavior()) {
                 processBehavior(ref, stmt, callSiteVars, csContr, base);
@@ -412,9 +430,11 @@ public class StmtProcessor {
                 (method.getDeclaringClass().getName().equals("java.lang.String") && isIgnored(method.getReturnType()) && !method.getSummaryMap().isEmpty());
     }
 
-    private boolean isIgnoredCallSite(List<String> csContr, JMethod ref) {
+    private boolean isIgnoredCallSite(List<String> csContr, JMethod ref, Type containerType) {
         if (!ref.isConstructor() && ref.getParamTypes().stream().anyMatch(p -> p.getName().equals("java.lang.String"))) return false; // 字符串操作？
         else if (ref.getName().equals("equals") && !ContrUtil.isControllable(csContr.get(1))) return true;
+        else if (typeSystem.isSubtype(typeSystem.getType("java.io.ObjectInputStream"), containerType)
+                && csContr.get(0).startsWith(ContrUtil.sTHIS)) return true;
         else return csContr.stream().allMatch(s -> !ContrUtil.isControllable(s));
     }
 
@@ -447,7 +467,13 @@ public class StmtProcessor {
     private Contr getContr(Pointer p) {
         if (p != null && !isIgnored(p.getType())) {
             if (drivenMap.contains(p)) {
-                return drivenMap.get(p);
+                Contr query = drivenMap.get(p);
+                if (stackManger.containsInstanceOfType(p)) {
+                    Contr checkedContr = query.copy(); // 返回副本可以方便还原状态
+                    checkedContr.setType(stackManger.getInstanceofType(p));
+                    return checkedContr;
+                }
+                return query;
             } else if (p instanceof CSVar var // 处理常量字符串
                     && var.getVar().isConst()
                     && var.getVar().getConstValue() instanceof StringLiteral s) {
@@ -458,6 +484,11 @@ public class StmtProcessor {
             } else {
                 Contr query = findPointsTo(p).getMergedContr();
                 updateContr(p, query);
+                if (stackManger.containsInstanceOfType(p)) {
+                    Contr checkedContr = query.copy();
+                    checkedContr.setType(stackManger.getInstanceofType(p));
+                    return checkedContr;
+                }
                 return query;
             }
         }
@@ -491,7 +522,7 @@ public class StmtProcessor {
         if (base == null) {
             ret.add(CallGraphs.resolveCallee(null, stmt));
         } else if (drivenMap.contains(base)) {
-            Contr baseFact = drivenMap.get(base);
+            Contr baseFact = getContr(base);
             if (!ContrUtil.isControllable(csContr.get(0)) || baseFact.isNew()) {
                 ret.add(CallGraphs.resolveCallee(baseFact.getType(), stmt));
             } else {
@@ -603,12 +634,13 @@ public class StmtProcessor {
                     case LOCAL_ASSIGN, SUMMARY_ASSIGN -> propagate(pfe.source(), marked, workList);
                     case CAST -> {
                         Contr from = findPointsTo(pfe.source()).getMergedContr();
-                        if (from != null && ContrUtil.isControllable(from)) {
+                        if (from != null && (ContrUtil.isControllable(from) || from.isNew())) {
                             pfe.getTransfers().forEach(transfer -> { // 转换类型
                                 if (transfer instanceof SpecialType st) {
                                     Contr contr = from.copy();
                                     contr.setCasted();
                                     if (typeSystem.isSubtype(contr.getType(), st.getType())) contr.setType(st.getType());
+                                    if (from.isNew()) contr.setValue("new " + st.getType());
                                     pt.add(p, contr);
                                 }
                             });
@@ -650,7 +682,7 @@ public class StmtProcessor {
                         if (pfe instanceof TaintTransferEdge tte) {
                             tte.getTransfers().forEach(t -> {
                                 Contr from = getContr(pfe.source());
-                                if (from != null && (ContrUtil.isControllable(from) || from.getCS() != null)) {
+                                if (from != null && (ContrUtil.isControllable(from) || from.isNew() || from.getCS() != null)) {
                                     Type type = t instanceof SpecialType st ? st.getType() : tte.target().getType();
                                     Contr contr = from.copy();
                                     contr.setType(type);
@@ -704,7 +736,7 @@ public class StmtProcessor {
             CSVar to = csManager.getCSVar(context, toVar);
             CSVar from = csManager.getCSVar(context, fromVar);
             Contr fromContr = getContr(from);
-            if (fromContr != null && (ContrUtil.isControllable(fromContr) || fromContr.getCS() != null)) {
+            if (fromContr != null && (ContrUtil.isControllable(fromContr) || fromContr.getCS() != null || fromContr.isNew())) {
                 String stype = transfer.type();
                 Type type = stype.equals("from") ? fromContr.getType() : typeSystem.getType(stype);
                 addPFGEdge(new TaintTransferEdge(from, to, transfer.isNewTransfer()), new SpecialType(type), lineNumber);
@@ -717,7 +749,7 @@ public class StmtProcessor {
         if (baseContr == null) return;
         if (ref.isConstructor()) {
             for (int i = 1; i < csContr.size(); i++) {
-                if (ContrUtil.isControllable(csContr.get(i))) {
+                if (ContrUtil.isControllable(csContr.get(i)) && !csContr.get(i).equals(ContrUtil.sTHIS)) {
                     baseContr.setValue(ContrUtil.sPOLLUTED);
                     break;
                 }

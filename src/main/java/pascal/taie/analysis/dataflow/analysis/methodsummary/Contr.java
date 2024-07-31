@@ -164,6 +164,10 @@ public class Contr {
         }
     }
 
+    private void addArrElement(ArrayList<Contr> arrayElements) {
+        this.arrayElements.addAll(arrayElements);
+    }
+
     public ArrayList<Contr> getArrayElements() {
         return arrayElements;
     }
@@ -176,6 +180,7 @@ public class Contr {
         if (isCasted) copy.setCasted();
         if (isNew) copy.setNew();
         if (isTransient) copy.setTransient();
+        if (!arrayElements.isEmpty()) copy.addArrElement(arrayElements);
         return copy;
     }
 

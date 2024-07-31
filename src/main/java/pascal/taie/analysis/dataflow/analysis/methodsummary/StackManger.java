@@ -7,9 +7,12 @@ import pascal.taie.analysis.dataflow.analysis.methodsummary.Utils.ContrUtil;
 import pascal.taie.analysis.graph.callgraph.Edge;
 import pascal.taie.analysis.pta.core.cs.CSCallGraph;
 import pascal.taie.analysis.pta.core.cs.element.CSMethod;
+import pascal.taie.analysis.pta.core.cs.element.CSVar;
 import pascal.taie.analysis.pta.core.cs.element.Pointer;
 import pascal.taie.ir.stmt.Stmt;
 import pascal.taie.language.classes.JMethod;
+import pascal.taie.language.type.ReferenceType;
+import pascal.taie.language.type.Type;
 import pascal.taie.util.collection.Lists;
 
 import java.io.BufferedWriter;
@@ -46,6 +49,12 @@ public class StackManger {
 
     private GadgetChainGraph gcGraph;
 
+    private Map<CSVar, Pointer> instanceOfRet;
+
+    private Map<Pointer, Type> instanceOfType;
+
+    private Map<Stmt, Pointer> instanceOfEnd;
+
     public StackManger() {
         this.edgeStack = new Stack<>();
         this.methodStack = new Stack<>();
@@ -61,6 +70,9 @@ public class StackManger {
         this.GCs = new HashSet<>();
         this.tempGCMap = new HashMap<>();
         this.tcMap = new HashMap<>();
+        this.instanceOfEnd = new HashMap<>();
+        this.instanceOfRet = new HashMap<>();
+        this.instanceOfType = new HashMap<>();
     }
 
     public void pushMethod(JMethod method) {
@@ -362,5 +374,40 @@ public class StackManger {
 
     public void count() {
         logger.info("total GC count: {}", GCs.size());
+    }
+
+    public void putInstanceOfInfo(CSVar retVar, Pointer pointer, ReferenceType type) {
+        instanceOfRet.put(retVar, pointer);
+        instanceOfType.put(pointer, type);
+    }
+
+    public boolean containsInstanceOfRet(CSVar var) {
+        return instanceOfRet.containsKey(var);
+    }
+
+    public Pointer removeInstanceOfRet(CSVar var) {
+        return instanceOfRet.remove(var);
+    }
+
+    public void putInstanceOfEnd(Stmt end, Pointer p) {
+        instanceOfEnd.put(end, p);
+    }
+
+    public boolean containsInstanceOfEnd(Stmt stmt) {
+        return instanceOfEnd.containsKey(stmt);
+    }
+
+    public void removeInstanceOfEnd(Stmt stmt) {
+        Pointer p = instanceOfEnd.get(stmt);
+        instanceOfType.remove(p);
+        instanceOfEnd.remove(stmt);
+    }
+
+    public boolean containsInstanceOfType(Pointer p) {
+        return instanceOfType.containsKey(p);
+    }
+
+    public Type getInstanceofType(Pointer p) {
+        return instanceOfType.get(p);
     }
 }
