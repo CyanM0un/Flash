@@ -47,8 +47,11 @@ public class CSCallGraph extends AbstractCallGraph<CSCallSite, CSMethod> {
 
     private final CSManager csManager;
 
-    public CSCallGraph(CSManager csManager) {
+    private Context emptyContext;
+
+    public CSCallGraph(CSManager csManager, Context context) {
         this.csManager = csManager;
+        this.emptyContext = context;
     }
 
     /**
@@ -73,7 +76,7 @@ public class CSCallGraph extends AbstractCallGraph<CSCallSite, CSMethod> {
     }
 
     public static JMethod getCallee(Edge<CSCallSite, CSMethod> edge) {
-        return ((CSMethod) edge.getCallee()).getMethod();
+        return edge.getCallee().getMethod();
     }
 
     /**
@@ -144,6 +147,11 @@ public class CSCallGraph extends AbstractCallGraph<CSCallSite, CSMethod> {
 
     @Override
     public Stream<Edge<CSCallSite, CSMethod>> edgesInTo(CSMethod csMethod) {
+        return csMethod.getEdges().stream();
+    }
+
+    public Stream<Edge<CSCallSite, CSMethod>> edgesInTo(JMethod method) {
+        CSMethod csMethod = csManager.getCSMethod(emptyContext, method);
         return csMethod.getEdges().stream();
     }
 

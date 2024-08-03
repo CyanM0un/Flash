@@ -10,6 +10,7 @@ import pascal.taie.analysis.pta.core.cs.element.CSMethod;
 import pascal.taie.analysis.pta.core.cs.element.CSVar;
 import pascal.taie.analysis.pta.core.cs.element.Pointer;
 import pascal.taie.ir.stmt.Stmt;
+import pascal.taie.language.classes.ClassHierarchy;
 import pascal.taie.language.classes.JMethod;
 import pascal.taie.language.type.ReferenceType;
 import pascal.taie.language.type.Type;
@@ -22,6 +23,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class StackManger {
+
+    private CSCallGraph csCallGraph;
 
     private Stack<JMethod> methodStack;
 
@@ -39,7 +42,11 @@ public class StackManger {
 
     private static final String GC_OUT = World.get().getOptions().getGC_OUT();
 
+    private static final int ENTRY_DEPTH = World.get().getOptions().getENTRY_DEPTH();
+
     private Set<List<String>> GCs;
+
+    private Set<String> entrySinkPair;
 
     private PrintWriter pw;
 
@@ -55,7 +62,10 @@ public class StackManger {
 
     private Map<Stmt, Pointer> instanceOfEnd;
 
-    public StackManger() {
+    private ClassHierarchy hierarchy;
+
+    public StackManger(CSCallGraph csCallGraph) {
+        this.csCallGraph = csCallGraph;
         this.edgeStack = new Stack<>();
         this.methodStack = new Stack<>();
         this.queryStack = new Stack<>();
@@ -73,6 +83,8 @@ public class StackManger {
         this.instanceOfEnd = new HashMap<>();
         this.instanceOfRet = new HashMap<>();
         this.instanceOfType = new HashMap<>();
+        this.entrySinkPair = new HashSet<>();
+        this.hierarchy = World.get().getClassHierarchy();
     }
 
     public void pushMethod(JMethod method) {
@@ -138,10 +150,6 @@ public class StackManger {
         return isInIf() ? getCurIfEnd().getLineNumber() : -1;
     }
 
-    private void debug(List l) {
-        l.forEach(logger::info);
-    }
-
     public void recordGC(Edge sinkEdge, JMethod sink) {
         List<Integer> tcList = Arrays.stream(sink.getSink()).boxed().collect(Collectors.toList());
         ArrayList<Edge> edgeList = getMaxLenEdgeList(sinkEdge, 0);
@@ -162,9 +170,35 @@ public class StackManger {
                 updateToSinkGC(toSinkGC);
             }
             List<String> simplyGC = simplyGC(gc);
-            if (GCs.add(simplyGC)) logAndWriteGC(simplyGC);
+            if (addGC(simplyGC)) {
+                logAndWriteGC(simplyGC, tempTCMap);
+            }
         }
         updateTCMap(tempTCMap);
+    }
+
+    private boolean addGC(List<String> gc) {
+        if (gc.size() > ENTRY_DEPTH) {
+            String pair = getEntrySinkPair(gc);
+            if (entrySinkPair.add(pair)) {
+                GCs.add(gc);
+                return true;
+            } else {
+                return false;
+            }
+        } else {
+            return GCs.add(gc);
+        }
+    }
+
+    private String getEntrySinkPair(List<String> gc) {
+        StringBuilder pair = new StringBuilder();
+        for (int i = 0; i < ENTRY_DEPTH; i++) {
+            pair.append(gc.get(i));
+            pair.append("#");
+        }
+        pair.append(gc.get(gc.size() - 1));
+        return pair.toString();
     }
 
     private List<String> simplyGC(List<String> gc) {
@@ -204,12 +238,32 @@ public class StackManger {
         return CSCallGraph.getCaller(edgeList.get(idx)).isSource();
     }
 
-    private void logAndWriteGC(List<String> gc) {
+    private void logAndWriteGC(List<String> gc, Map<String, List<Integer>> tempTCMap) {
         for (int i = 0; i < gc.size(); i++) {
-            String line = gc.get(i);
+            String caller_s = gc.get(i);
+            JMethod caller = hierarchy.getMethod(caller_s);
+            if (i == gc.size() - 1) {
+                logger.info(caller_s);
+                pw.println(caller_s);
+            } else {
+                JMethod callee = hierarchy.getMethod(gc.get(i + 1));
+                List<Integer> tc = tempTCMap.containsKey(caller_s) ? tempTCMap.get(caller_s) : tcMap.get(caller_s);
+                csCallGraph.edgesInTo(callee).forEach(edge -> {
+                    if (CSCallGraph.getCaller(edge).equals(caller)) {
+                        String line = caller_s + "-" + edge.getCSIntContr() + "->" + tc;
+                        logger.info(line);
+                        pw.println(line);
+                    }
+                });
+            }
+        }
+        logger.info("");
+        pw.println("");
+
+        gc.forEach(line -> {
             logger.info(line);
             pw.println(line);
-        }
+        });
         logger.info("");
         pw.println("");
         pw.flush();
@@ -246,7 +300,9 @@ public class StackManger {
             }
             tcList = temp;
             JMethod sGadget = CSCallGraph.getCaller(edge);
-            if (!sGadget.isSource()) tempTCMap.put(CSCallGraph.getCaller(edge).toString(), tcList);
+            if (!sGadget.isSource()) {
+                tempTCMap.put(sGadget.toString(), tcList);
+            }
         }
         return tempTCMap;
     }
@@ -295,6 +351,22 @@ public class StackManger {
         }
     }
 
+    private void linkGC(Edge callEdge, JMethod callee) {
+        String key = callee.toString();
+        if (tcMap.containsKey(key)) {
+            List<Integer> tcList = tcMap.get(key);
+            Set<List<String>> newToSinkGCs = new HashSet<>();
+            for (List<String> toSinkGC : gcGraph.collectPath(key)) {
+                int sinkGCLen = toSinkGC.size();
+                ArrayList<Edge> edgeList = getMaxLenEdgeList(callEdge, sinkGCLen - 1);
+                if (edgeList == null) return;
+
+                doLinkGC(edgeList, tcList, toSinkGC, newToSinkGCs);
+            }
+            gcGraph.addPaths(newToSinkGCs);
+        }
+    }
+
     private void reLinkGC(Set<List<Edge>> edgeLists, String key) {
         List<Integer> tcList = tcMap.get(key);
         edgeLists.forEach(edgeList -> {
@@ -332,6 +404,7 @@ public class StackManger {
         List<String> unSafeGC = getUnSafeGCList(edgeList); // 可以用来避免重复操作
         unSafeGC.addAll(toSinkGC);
         if (gcGraph.containsPath(unSafeGC)
+                || (unSafeGC.size() > ENTRY_DEPTH && entrySinkPair.contains(simplyGC(unSafeGC)))
                 || GCs.contains(simplyGC(unSafeGC))
                 || newToSinkGCs.contains(unSafeGC)) return;
 
@@ -350,25 +423,11 @@ public class StackManger {
                 newToSinkGCs.add(newToSinkGC);
             }
             List<String> simplyGC = simplyGC(gc);
-            if (GCs.add(simplyGC)) logAndWriteGC(simplyGC);
+            if (addGC(simplyGC)) {
+                logAndWriteGC(simplyGC, tempTCMap);
+            }
         }
         updateTCMap(tempTCMap);
-    }
-
-    private void linkGC(Edge callEdge, JMethod callee) {
-        String key = callee.toString();
-        if (tcMap.containsKey(key)) {
-            List<Integer> tcList = tcMap.get(key);
-            Set<List<String>> newToSinkGCs = new HashSet<>();
-            for (List<String> toSinkGC : gcGraph.collectPath(key)) {
-                int sinkGCLen = toSinkGC.size();
-                ArrayList<Edge> edgeList = getMaxLenEdgeList(callEdge, sinkGCLen - 1);
-                if (edgeList == null) return;
-
-                doLinkGC(edgeList, tcList, toSinkGC, newToSinkGCs);
-            }
-            gcGraph.addPaths(newToSinkGCs);
-        }
     }
 
 

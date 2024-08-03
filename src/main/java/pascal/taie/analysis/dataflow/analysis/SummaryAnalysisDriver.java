@@ -47,9 +47,9 @@ public class SummaryAnalysisDriver extends MethodAnalysis<DataflowResult<Stmt, C
         this.heapModel = new AllocationSiteBasedModel(getOptions());
         this.emptyContext = ContextSelectorFactory.makeCISelector().getEmptyContext();
         this.csManager = new MapBasedCSManager();
-        this.stackManger = new StackManger();
+        this.csCallGraph = new CSCallGraph(csManager, emptyContext);
+        this.stackManger = new StackManger(csCallGraph);
         this.pointerFlowGraph = new PointerFlowGraph(csManager);
-        this.csCallGraph = new CSCallGraph(csManager);
         this.solver = Solver.getSolver();
         setPlugin(getOptions());
     }
@@ -72,6 +72,7 @@ public class SummaryAnalysisDriver extends MethodAnalysis<DataflowResult<Stmt, C
     @Override
     public DataflowResult<Stmt, ContrFact> analyze(IR ir) {
         JMethod method = ir.getMethod();
+        if (stackManger.containsMethod(method)) return null;
         CFG<Stmt> cfg = ir.getResult(CFGBuilder.ID);
         if (cfg == null) return null; // 跳过abstract方法分析
         plugin.onNewMethod(method);

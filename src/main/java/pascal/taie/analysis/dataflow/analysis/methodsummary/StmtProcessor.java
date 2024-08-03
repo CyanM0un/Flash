@@ -212,7 +212,8 @@ public class StmtProcessor {
                 CSVar to = csManager.getCSVar(context, stmt.getLValue());
                 if (stmt.isStatic()) {
                     // 先确保类加载器
-                    AnalysisManager.runMethodAnalysis(field.getDeclaringClass().getClinit());
+                    JMethod clinit = field.getDeclaringClass().getClinit();
+                    if (clinit != null && !stackManger.containsMethod(clinit)) AnalysisManager.runMethodAnalysis(clinit);
                     StaticField sfield = csManager.getStaticField(field);
                     addPFGEdge(sfield, to, FlowKind.STATIC_LOAD, lineNumber);
                 } else {
@@ -484,7 +485,7 @@ public class StmtProcessor {
             } else {
                 Contr query = findPointsTo(p).getMergedContr();
                 updateContr(p, query);
-                if (stackManger.containsInstanceOfType(p)) {
+                if (query != null && stackManger.containsInstanceOfType(p)) {
                     Contr checkedContr = query.copy();
                     checkedContr.setType(stackManger.getInstanceofType(p));
                     return checkedContr;
