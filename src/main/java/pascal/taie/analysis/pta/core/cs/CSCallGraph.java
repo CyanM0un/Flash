@@ -22,6 +22,7 @@
 
 package pascal.taie.analysis.pta.core.cs;
 
+import pascal.taie.World;
 import pascal.taie.analysis.graph.callgraph.AbstractCallGraph;
 import pascal.taie.analysis.graph.callgraph.Edge;
 import pascal.taie.analysis.pta.core.cs.context.Context;
@@ -170,5 +171,10 @@ public class CSCallGraph extends AbstractCallGraph<CSCallSite, CSMethod> {
     @Override
     public Set<CSMethod> getResult(Stmt stmt) {
         throw new UnsupportedOperationException();
+    }
+
+    public CSMethod getCSMethod(String methodSig) {
+        JMethod method = World.get().getClassHierarchy().getMethod(methodSig);
+        return csManager.getCSMethod(emptyContext, method);
     }
 }

@@ -355,7 +355,7 @@ public class StmtProcessor {
                 return null;
             }
             if (ref.isSink()) {
-                stackManger.recordGC(getCallEdge(stmt, ref, csContr), ref);
+                addWL(stmt, ref, csContr);
                 return null;
             }
             callees.addAll(getCallees(stmt, base, csContr, ref.getDeclaringClass().getType()));
