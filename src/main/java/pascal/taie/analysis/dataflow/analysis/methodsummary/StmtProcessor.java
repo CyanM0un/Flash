@@ -609,7 +609,7 @@ public class StmtProcessor {
         workList.add(pointer);
         Set<Pointer> marked = Sets.newSet();
 
-           while (!workList.isEmpty()) {
+        while (!workList.isEmpty()) {
             Pointer p = workList.poll();
             if (drivenMap.contains(p)) {
                 pt.add(p, drivenMap.get(p));

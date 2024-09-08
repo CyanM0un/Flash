@@ -208,7 +208,8 @@ public final class World extends AbstractResultHolder
     public void addGCEntry(JMethod m) {
         if (!GCEntries.contains(m)) {
             GCEntries.add(m);
-            if (SootClassLoader.readSubSigList.contains(m.getSubsignature().toString()) || getOptions().getSources().contains(m.toString())) m.setSource();
+            if (SootClassLoader.readSubSigList.contains(m.getSubsignature().toString())
+                    || getOptions().getSources().contains(m.toString())) m.setSource();
         }
     }
 

@@ -13,18 +13,13 @@ import pascal.taie.analysis.pta.core.cs.context.Context;
 import pascal.taie.analysis.pta.core.cs.element.CSManager;
 import pascal.taie.analysis.pta.core.cs.element.CSObj;
 import pascal.taie.analysis.pta.core.cs.element.CSVar;
-import pascal.taie.analysis.pta.core.heap.Descriptor;
 import pascal.taie.analysis.pta.core.heap.HeapModel;
-import pascal.taie.analysis.pta.core.heap.Obj;
 import pascal.taie.analysis.pta.core.solver.PointerFlowGraph;
 import pascal.taie.ir.exp.Var;
+import pascal.taie.ir.stmt.New;
 import pascal.taie.ir.stmt.Stmt;
-import pascal.taie.language.classes.JMethod;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 public class SummaryAnalysis extends AbstractDataflowAnalysis<Stmt, ContrFact> {
 
@@ -53,7 +48,7 @@ public class SummaryAnalysis extends AbstractDataflowAnalysis<Stmt, ContrFact> {
     }
 
     @Override
-    public ContrFact newBoundaryFact() { // 直接根据第一次的分析结果初始化参数可控性
+    public ContrFact newBoundaryFact() {
         List<Var> params = cfg.getIR().getParams();
         for (int i = 0; i < params.size(); i++) {
             CSVar param = csManager.getCSVar(context, params.get(i));
@@ -67,6 +62,12 @@ public class SummaryAnalysis extends AbstractDataflowAnalysis<Stmt, ContrFact> {
             CSObj csContrThis = ContrUtil.getObj(csThisVar, ContrUtil.sTHIS, heapModel, context, csManager);
             stmtProcessor.addPFGEdge(csContrThis, csThisVar, FlowKind.NEW_CONTR, cfg.getEntry().getLineNumber());
         }
+        // 顺序处理前前先行处理所有的new语句
+        cfg.getIR().forEach(stmt -> {
+            if (stmt instanceof New) {
+                stmtProcessor.process(stmt);
+            }
+        });
         return newInitialFact();
     }
 
@@ -95,7 +96,7 @@ public class SummaryAnalysis extends AbstractDataflowAnalysis<Stmt, ContrFact> {
     public boolean transferNode(Stmt stmt, ContrFact in, ContrFact out) {
         ContrFact newIn = in.copy();
         stmtProcessor.setFact(newIn);
-        stmtProcessor.process(stmt);
+        if (!(stmt instanceof New))stmtProcessor.process(stmt);
         return out.copyFrom(stmtProcessor.getFact());
     }
 
