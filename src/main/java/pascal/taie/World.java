@@ -225,6 +225,15 @@ public final class World extends AbstractResultHolder
         return invocationHandlerMethods;
     }
 
+    public void filterHandler() {
+        if (options.isFilterNonSerializable()) {
+            Set<JMethod> methods = new HashSet<>(invocationHandlerMethods);
+            for (JMethod method : methods) {
+                if (!method.getDeclaringClass().isSerializable()) invocationHandlerMethods.remove(method);
+            }
+        }
+    }
+
     public Stream<JMethod> allMethods() {
         return World.get()
                 .getClassHierarchy()
@@ -271,5 +280,4 @@ public final class World extends AbstractResultHolder
                         .collect(Collectors.toList())))
                 .collect(Collectors.toSet());
     }
-
 }

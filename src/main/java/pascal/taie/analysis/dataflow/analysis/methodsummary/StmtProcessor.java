@@ -121,8 +121,7 @@ public class StmtProcessor {
     }
 
     private void addWL(Invoke stmt, JMethod callee, List<String> edgeContr) {
-        if (!isIgnored(callee)
-                && !(callee.isTransfer() || callee.hasImitatedBehavior())) {
+        if (!isIgnored(callee) && (callee.isSink() || (!callee.isTransfer() && !callee.hasImitatedBehavior()))) {
             Edge callEdge = getCallEdge(stmt, callee, edgeContr);
             boolean inStack = stackManger.containsMethod(callee);
             if (csCallGraph.addEdge(callEdge)) stackManger.pushCallEdge(callEdge, inStack);
@@ -529,7 +528,7 @@ public class StmtProcessor {
                 } else {
                     ret.addAll(filterCHA(chaTargets, baseFact.getType(), refType));
                     if (stmt.isInterface()
-                            && ContrUtil.isCallSite(baseFact.getValue()) // 值为polluted的存在误报，但这样是否有漏报？
+                            && ContrUtil.isCallSite(baseFact.getValue())
                             && !baseFact.isCasted()) {
                         processDynamicProxy(stmt, csContr);
                     }
@@ -765,6 +764,15 @@ public class StmtProcessor {
                     int idx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
                     Contr fromContr = getContr(callSiteVars.get(idx));
                     if (fromContr == null) return;
+                    if (method.isSink()) { // special for forName
+                        Contr loaderContr = getContr(callSiteVars.get(callSiteVars.size() - 1));
+                        if (ContrUtil.isControllable(fromContr)
+                                && ContrUtil.isControllable(loaderContr)
+                                && loaderContr.getType().equals(typeSystem.getType("java.net.URLClassLoader"))) {
+                            addWL(stmt, method, csContr);
+                            return;
+                        }
+                    }
                     String clzName;
                     Set<JMethod> callees;
                     if (fromContr.getType().getName().equals("java.lang.String")) { // Class#forName
@@ -915,21 +923,6 @@ public class StmtProcessor {
         if (Objects.equals(var1, var2)) return true;
         if (isThis(var1) && isThis(var2) && Objects.equals(var1.getType(), var2.getType())) return true;
         return false;
-    }
-
-    private boolean checkRequiredType(JMethod ref, List<CSVar> callSiteVars, List<String> csContr) { // 一些特殊情况，减少误报
-        if (ref.toString().equals("<java.lang.Class: java.lang.Object newInstance()>")) {
-            CSVar base = callSiteVars.get(0);
-            if (drivenMap.contains(base)
-                    && drivenMap.get(base).getOrigin() instanceof InstanceField iField
-                    && iField.getField().getGSignature() != null) {
-                String gSignature = iField.getField().getGSignature().toString();
-                if (gSignature.contains("extends")) {
-                    return false;
-                }
-            }
-        }
-        return !ref.toString().equals("<java.lang.reflect.Method: java.lang.Object invoke(java.lang.Object,java.lang.Object[])>");
     }
 
     private Collection<? extends JMethod> filterCHA(Set<JMethod> methods, Type type, Type refType) {

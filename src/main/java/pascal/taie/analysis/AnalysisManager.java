@@ -110,6 +110,7 @@ public class AnalysisManager {
         }
         // execute analyses
         plan.analyses().forEach(config -> methodAnalyses.add((MethodAnalysis) getAnalysis(config)));
+        World.get().filterHandler();
         workList.addAll(World.get().getGCEntries());
 
         while (!workList.isEmpty()) {

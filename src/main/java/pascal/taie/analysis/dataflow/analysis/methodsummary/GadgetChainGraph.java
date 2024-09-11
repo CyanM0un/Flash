@@ -78,16 +78,13 @@ public class GadgetChainGraph {
     }
 
     public void updateTC(String key, List<Integer> tc, String sink) {
-        adjList.get(key).updateTC(sink, tc);
+        if (adjList.containsKey(key)) { // source not exist
+            adjList.get(key).updateTC(sink, tc);
+        }
     }
 
     public boolean containsTC(String key) {
         return adjList.containsKey(key) && adjList.get(key).containsTC();
-    }
-
-    public List<Integer> getTCList(List<String> toSinkGC) {
-        String sink = toSinkGC.get(toSinkGC.size() - 1);
-        return getTCList(toSinkGC.get(0), sink);
     }
 
     public List<Integer> getTCList(String caller, String sink) {

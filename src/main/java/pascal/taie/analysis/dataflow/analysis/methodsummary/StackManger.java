@@ -297,9 +297,7 @@ public class StackManger {
             tcList = getNewTCList(tcList, edge.getCSIntContr());
             if (tcList.contains(ContrUtil.iNOT_POLLUTED)) return tempTCMap;
             JMethod sGadget = CSCallGraph.getCaller(edge);
-            if (!sGadget.isSource()) {
-                tempTCMap.put(sGadget.toString(), tcList);
-            }
+            tempTCMap.put(sGadget.toString(), tcList);
         }
         return tempTCMap;
     }
@@ -320,7 +318,7 @@ public class StackManger {
         for (int i = 0; i < edgeListSize; i++) {
             JMethod m = CSCallGraph.getCaller(edgeList.get(i));
             String key = m.toString();
-            if (tcMap.containsKey(key) || m.isSource()) gc.add(key);
+            if (tcMap.containsKey(key)) gc.add(key);
             else break;
         }
         Collections.reverse(gc);
