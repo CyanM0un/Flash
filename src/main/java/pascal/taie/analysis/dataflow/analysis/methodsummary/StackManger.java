@@ -160,7 +160,10 @@ public class StackManger {
         gc.add(sink.toString());
 
         if (!startWithSource(gc)) {
-            if (gc.size() > MAX_LEN) gc = gc.subList(1, gc.size());
+            if (gc.size() > MAX_LEN) {
+                tempTCMap.remove(gc.get(0));
+                gc = gc.subList(1, gc.size());
+            }
             updateToSinkGC(gc);
         } else {
             if (gc.size() > 2) {
@@ -172,7 +175,6 @@ public class StackManger {
                 logAndWriteGC(simplyGC, tempTCMap);
             }
         }
-        if (gc.size() > MAX_LEN) tempTCMap.remove(gc.get(0));
         updateTCMap(tempTCMap, sink.toString());
     }
 
@@ -209,7 +211,7 @@ public class StackManger {
             if (subSigList.contains(subSig)) {
                 int from = subSigList.indexOf(subSig);
                 int end = subSigList.size();
-                Edge edge = edgeList.get(gc.size() - from - 1);
+                Edge edge = getEdge(edgeList, simplyGC.get(from - 1));
                 if (edge.getKind() != CallKind.STATIC) {
                     List<Integer> edgeContr = edge.getCSIntContr();
                     List<Integer> tcList = getTCList(gadget, tempTCMap, edgeList);
@@ -395,19 +397,22 @@ public class StackManger {
         if (tempTCMap.isEmpty()) return;
         List<String> gc = getGCList(subEdgeList, tempTCMap);
         gc.addAll(toSinkGC);
-        int gcSize = gc.size();
         if (!startWithSource(gc)) {
+            if (gc.size() > MAX_LEN) {
+                tempTCMap.remove(gc.get(0));
+                gc = gc.subList(1, gc.size());
+            }
             updateToSinkGC(gc);
         } else {
-            if (gcSize > 2) {
-                updateToSinkGC(gc.subList(1, gcSize));
+            if (gc.size() > 2) {
+                updateToSinkGC(gc.subList(1, gc.size()));
             }
             List<String> simplyGC = simplyGC(gc, tempTCMap, gcEdgeList);
             if (addGC(simplyGC)) {
                 logAndWriteGC(simplyGC, tempTCMap);
             }
         }
-        updateTCMap(tempTCMap, gc.get(gcSize - 1));
+        updateTCMap(tempTCMap, gc.get(gc.size() - 1));
     }
 
     public void count() {
@@ -461,14 +466,17 @@ public class StackManger {
 
     private Edge getEdge(String caller, String callee) {
         JMethod calleeMethod = hierarchy.getMethod(callee);
-        try {
-            return csCallGraph.edgesInTo(calleeMethod)
-                    .filter(edge -> CSCallGraph.getCaller(edge).toString().equals(caller))
-                    .findFirst()
-                    .get();
-        } catch (Exception e) {
-            return null;
-        }
+        return csCallGraph.edgesInTo(calleeMethod)
+                .filter(edge -> CSCallGraph.getCaller(edge).toString().equals(caller))
+                .findFirst()
+                .get();
+    }
+
+    private Edge getEdge(List<Edge> edgeList, String caller) {
+        return edgeList.stream()
+                .filter(edge -> CSCallGraph.getCaller(edge).toString().equals(caller))
+                .findFirst()
+                .get();
     }
 
     private List<Integer> getTCList(String tcKey, Map<String, List<Integer>> tempTCMap, List<Edge> edgeList) {

@@ -373,10 +373,6 @@ public class StmtProcessor {
             for (JMethod callee : callees) {
                 if (isIgnored(callee)) continue;
                 Map<String, String> summary = callee.getSummaryMap();
-                if (stackManger.containsMethod(callee)) {
-                    if (retContr != null) retContr.setValue(ContrUtil.sPOLLUTED); // 处理递归导致的忽略问题，直接设为可控
-                    continue;
-                }
                 for (String sKey : summary.keySet()) {
                     String sValue = summary.get(sKey);
                     if (sKey.equals("return")) { // return
@@ -720,7 +716,7 @@ public class StmtProcessor {
                 if (!Objects.equals(getPointerMethod(source), targetMethod) // 如果来源变量不属于当前方法，则参数来源可能不一致
                         && !pt.isEmpty()
                         && ContrUtil.isControllableParam(pt.getMergedContr())) {
-                    pt.setValue(ContrUtil.sPOLLUTED);
+                    pt.setValue(source instanceof InstanceField ? ContrUtil.sTHIS : ContrUtil.sPOLLUTED);
                 }
             }
         }
@@ -750,8 +746,9 @@ public class StmtProcessor {
         if (baseContr == null) return;
         if (ref.isConstructor()) {
             for (int i = 1; i < csContr.size(); i++) {
-                if (ContrUtil.isControllable(csContr.get(i)) && !csContr.get(i).equals(ContrUtil.sTHIS)) {
-                    baseContr.setValue(ContrUtil.sPOLLUTED);
+                String contr = csContr.get(i);
+                if (ContrUtil.isControllable(contr)) {
+                    baseContr.setValue(contr);
                     break;
                 }
             }
@@ -876,15 +873,6 @@ public class StmtProcessor {
                         updateContr(base, replacedContr);
                     } catch (Exception e) {
                         throw new RuntimeException(e);
-                    }
-                }
-                case "polluteRec" -> {
-                    List<String> copy = new ArrayList<>();
-                    copy.addAll(csContr);
-                    copy.remove(0);
-                    if (copy.stream().allMatch(i -> ContrUtil.isControllable(i))
-                            && drivenMap.contains(base)) {
-                        drivenMap.get(base).setValue(ContrUtil.sPOLLUTED);
                     }
                 }
             }
