@@ -22,30 +22,22 @@
 
 package pascal.taie.analysis;
 
-import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import pascal.taie.World;
 import pascal.taie.analysis.dataflow.analysis.SummaryAnalysisDriver;
-import pascal.taie.analysis.graph.callgraph.CallGraph;
-import pascal.taie.analysis.graph.callgraph.CallGraphBuilder;
 import pascal.taie.config.AnalysisConfig;
 import pascal.taie.config.ConfigException;
 import pascal.taie.config.Plan;
-import pascal.taie.config.Scope;
 import pascal.taie.ir.IR;
 import pascal.taie.language.classes.JClass;
 import pascal.taie.language.classes.JMethod;
 import pascal.taie.util.AnalysisException;
-import pascal.taie.util.Timer;
 import pascal.taie.util.graph.SimpleGraph;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.*;
 
 /**
  * Creates and executes analyses based on given analysis plan.

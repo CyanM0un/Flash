@@ -88,8 +88,7 @@ public class StmtProcessor {
 
     private Contr getOrAddContr(Pointer p) {
         if (!drivenMap.contains(p)) {
-            Contr ret = getContr(p);
-            if (ret == null) ret = Contr.newInstance(p);
+            Contr ret = Contr.newInstance(p);
             updateContr(p, ret);
             return ret;
         } else {
@@ -371,6 +370,10 @@ public class StmtProcessor {
             }
             for (JMethod callee : callees) {
                 if (isIgnored(callee)) continue;
+                if (stackManger.containsMethod(callee)) {
+                    if (retContr != null) retContr.setValue(csContr.get(0)); // 处理递归导致的忽略问题, 暂时没有更好的方法
+                    continue;
+                }
                 Map<String, String> summary = callee.getSummaryMap();
                 for (String sKey : summary.keySet()) {
                     String sValue = summary.get(sKey);
@@ -702,6 +705,7 @@ public class StmtProcessor {
     }
 
     private boolean processAlias(Pointer source, Set<PointerFlowEdge> matchEdges, PointsTo pt, int lineNumber) {
+        boolean ret = false;
         for (PointerFlowEdge matchEdge : matchEdges) { // TODO field sensitive
             Pointer matchSource = matchEdge.source();
             Pointer matchTarget = matchEdge.target();
@@ -711,7 +715,7 @@ public class StmtProcessor {
                 if ((ifEnd != -1 && lineNumber >= ifEnd)
                         || targetMethod == null
                         || targetMethod.getName().equals("<init>")) continue;
-                pt.add(source, findPointsTo(matchSource).getMergedContr());
+                if(!ret) ret = pt.add(source, findPointsTo(matchSource).getMergedContr());
                 if (!Objects.equals(getPointerMethod(source), targetMethod) // 如果来源变量不属于当前方法，则参数来源可能不一致
                         && !pt.isEmpty()
                         && ContrUtil.isControllableParam(pt.getMergedContr())) {
@@ -719,7 +723,7 @@ public class StmtProcessor {
                 }
             }
         }
-        return !pt.isEmpty();
+        return ret;
     }
 
     private void processTransfer(Set<TaintTransfer> transfers, Invoke callSite) {

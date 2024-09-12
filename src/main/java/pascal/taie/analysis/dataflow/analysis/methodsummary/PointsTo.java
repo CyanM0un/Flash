@@ -19,15 +19,19 @@ public class PointsTo {
         return new PointsTo();
     }
 
-    public void add(Pointer p, Contr contr) { // 简单实现了merge策略
-        if (contr == null) return;
+    public boolean add(Pointer p, Contr contr) { // 简单实现了merge策略
+        if (contr == null) return false;
         if (relatedMap.isEmpty()) {
             relatedMap.put(p, contr);
+            return true;
         } else {
             Contr old = relatedMap.entrySet().iterator().next().getValue();
             if (ContrUtil.needUpdateInMerge(old.getValue(), contr.getValue())) {
                 relatedMap.clear();
                 relatedMap.put(p, contr);
+                return true;
+            } else {
+                return false;
             }
         }
     }

@@ -225,8 +225,6 @@ public record PrioriKnowConfig(List<JMethod> sinks,
                         if (method != null) {
                             method.setIgnored();
                             ignores.add(method);
-                        } else {
-                            logger.warn("Cannot find ignored method '{}'", methodSig);
                         }
                     } else {
                         String classSig = elem.get("class").asText();
@@ -234,8 +232,6 @@ public record PrioriKnowConfig(List<JMethod> sinks,
                         if (jClass != null) {
                             jClass.setIgnored();
                             ignores.add(jClass);
-                        } else {
-                            logger.warn("Cannot find ignored class '{}'", classSig);
                         }
                     }
                 }
