@@ -33,12 +33,15 @@ public class Contr {
 
     private ArrayList<Contr> arrayElements = new ArrayList<>();
 
+    private boolean reQuery;
+
     private Contr() {
     }
 
     private Contr(Pointer pointer) {
         this.pointer = pointer;
         this.type = pointer.getType();
+        this.reQuery = false;
         if (pointer instanceof CSVar var) {
             this.name = var.getVar().getName();
             setSerializable(var.getType());
@@ -181,6 +184,7 @@ public class Contr {
         if (isNew) copy.setNew();
         if (isTransient) copy.setTransient();
         if (!arrayElements.isEmpty()) copy.addArrElement(arrayElements);
+        if (reQuery) copy.setReQuery(true);
         return copy;
     }
 
@@ -195,5 +199,13 @@ public class Contr {
         return pointer.equals(other.pointer) &&
                 type.equals(other.type) &&
                 value.equals(other.value);
+    }
+
+    public void setReQuery(boolean flag) {
+        this.reQuery = flag;
+    }
+
+    public boolean isReQuery() {
+        return this.reQuery;
     }
 }

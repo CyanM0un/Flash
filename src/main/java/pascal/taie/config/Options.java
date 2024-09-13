@@ -291,15 +291,6 @@ public class Options implements Serializable {
     }
 
     @JsonProperty
-    @Option(names = {"-ed", "--ENTRY_DEPTH"},
-            description = "entry depth of a gadget chain that consider same")
-    private int ENTRY_DEPTH;
-
-    public int getENTRY_DEPTH() {
-        return ENTRY_DEPTH;
-    }
-
-    @JsonProperty
     @Option(names = {"-a", "--analysis"},
             description = "Analyses to be executed",
             paramLabel = "<analysisID[=<options>]>",
@@ -560,7 +551,6 @@ public class Options implements Serializable {
                 ", GC_OUT=" + GC_OUT +
                 ", filterNonSerializable=" + filterNonSerializable +
                 ", GC_MAX_LEN=" + GC_MAX_LEN +
-                ", ENTRY_DEPTH=" + ENTRY_DEPTH +
                 ", analyses=" + analyses +
                 ", onlyGenPlan=" + onlyGenPlan +
                 ", keepResult=" + keepResult +

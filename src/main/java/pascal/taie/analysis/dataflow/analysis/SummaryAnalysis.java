@@ -5,7 +5,6 @@ import pascal.taie.analysis.dataflow.analysis.methodsummary.ContrFact;
 import pascal.taie.analysis.dataflow.analysis.methodsummary.StackManger;
 import pascal.taie.analysis.dataflow.analysis.methodsummary.StmtProcessor;
 import pascal.taie.analysis.dataflow.analysis.methodsummary.Utils.ContrUtil;
-import pascal.taie.analysis.graph.callgraph.Edge;
 import pascal.taie.analysis.graph.cfg.CFG;
 import pascal.taie.analysis.graph.flowgraph.FlowKind;
 import pascal.taie.analysis.pta.core.cs.CSCallGraph;
@@ -13,13 +12,16 @@ import pascal.taie.analysis.pta.core.cs.context.Context;
 import pascal.taie.analysis.pta.core.cs.element.CSManager;
 import pascal.taie.analysis.pta.core.cs.element.CSObj;
 import pascal.taie.analysis.pta.core.cs.element.CSVar;
+import pascal.taie.analysis.pta.core.cs.element.Pointer;
 import pascal.taie.analysis.pta.core.heap.HeapModel;
 import pascal.taie.analysis.pta.core.solver.PointerFlowGraph;
 import pascal.taie.ir.exp.Var;
 import pascal.taie.ir.stmt.New;
 import pascal.taie.ir.stmt.Stmt;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class SummaryAnalysis extends AbstractDataflowAnalysis<Stmt, ContrFact> {
 
@@ -78,7 +80,12 @@ public class SummaryAnalysis extends AbstractDataflowAnalysis<Stmt, ContrFact> {
 
     @Override
     public void meetInto(ContrFact fact, ContrFact target) {
-        fact.forEach((p, contr) -> target.update(p, merge(contr, target.get(p))));
+        Set<Pointer> toQuery = new HashSet<>();
+        fact.forEach((p, contr) -> {
+            target.update(p, merge(contr, target.get(p)));
+            if (contr.isReQuery()) toQuery.add(p);
+        });
+        toQuery.forEach(key -> target.remove(key));
     }
 
     private Contr merge(Contr c1, Contr c2) {

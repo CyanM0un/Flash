@@ -97,7 +97,14 @@ public class StmtProcessor {
     }
 
     private void updateContr(Pointer k, Contr v) {
-        if (k!= null && v != null && curMethod.equals(getPointerMethod(k))) drivenMap.update(k, v);
+        if (k!= null && v != null && curMethod.equals(getPointerMethod(k))) {
+            drivenMap.update(k, v);
+            if (v.isReQuery()) v.setReQuery(false);
+        }
+    }
+
+    private boolean containsContr(Pointer p) {
+        return drivenMap.contains(p) && !drivenMap.get(p).isReQuery();
     }
 
     public void addPFGEdge(CSObj from, Pointer to, FlowKind kind, int lineNumber) {
@@ -115,8 +122,7 @@ public class StmtProcessor {
     public void addPFGEdge(PointerFlowEdge edge, Transfer transfer, int lineNumber) {
         edge.addTransfer(transfer);
         edge.setLineNumber(lineNumber);
-        pointerFlowGraph.addEdge(edge);
-        varsToReFind(edge.target(), new HashSet<>());
+        if (pointerFlowGraph.addEdge(edge) != null) varsToReQuery(edge.target(), new HashSet<>());
     }
 
     private void addWL(Invoke stmt, JMethod callee, List<String> edgeContr) {
@@ -128,13 +134,13 @@ public class StmtProcessor {
         }
     }
 
-    private void varsToReFind(Pointer p, HashSet<Pointer> visited) { // drivenMap会缓存结果，如果缓存的变量新增加了指向边，则需要重新查询
-        if (visited.add(p)) {
+    private void varsToReQuery(Pointer p, HashSet<Pointer> visited) { // drivenMap会缓存结果，如果缓存的变量新增加了指向边，则需要重新查询
+        if (Objects.equals(getPointerMethod(p), curMethod) && visited.add(p)) {
             if (drivenMap.contains(p)) {
-                drivenMap.remove(p);
+                drivenMap.get(p).setReQuery(true);
             }
             for (PointerFlowEdge outEdge : p.getOutEdges()) {
-                varsToReFind(outEdge.target(), visited);
+                varsToReQuery(outEdge.target(), visited);
             }
         }
     }
@@ -465,7 +471,7 @@ public class StmtProcessor {
 
     private Contr getContr(Pointer p) {
         if (p != null && !isIgnored(p.getType())) {
-            if (drivenMap.contains(p)) {
+            if (containsContr(p)) {
                 Contr query = drivenMap.get(p);
                 if (stackManger.containsInstanceOfType(p)) {
                     Contr checkedContr = query.copy(); // 返回副本可以方便还原状态
@@ -478,7 +484,7 @@ public class StmtProcessor {
                     && var.getVar().getConstValue() instanceof StringLiteral s) {
                 Contr cs = Contr.newInstance(p);
                 cs.setConstString(s.getString());
-                drivenMap.update(p, cs);
+                updateContr(p, cs);
                 return cs;
             } else {
                 Contr query = findPointsTo(p).getMergedContr();
@@ -520,7 +526,7 @@ public class StmtProcessor {
         Set<JMethod> ret = new HashSet<>();
         if (base == null) {
             ret.add(CallGraphs.resolveCallee(null, stmt));
-        } else if (drivenMap.contains(base)) {
+        } else if (getContr(base) != null) {
             Contr baseFact = getContr(base);
             if (!ContrUtil.isControllable(csContr.get(0)) || baseFact.isNew()) {
                 ret.add(CallGraphs.resolveCallee(baseFact.getType(), stmt));
@@ -609,7 +615,7 @@ public class StmtProcessor {
 
         while (!workList.isEmpty()) {
             Pointer p = workList.poll();
-            if (drivenMap.contains(p)) {
+            if (containsContr(p)) {
                 pt.add(p, drivenMap.get(p));
                 continue;
             }

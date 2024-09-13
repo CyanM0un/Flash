@@ -44,11 +44,7 @@ public class StackManger {
 
     private static final String GC_OUT = World.get().getOptions().getGC_OUT();
 
-    private static final int ENTRY_DEPTH = World.get().getOptions().getENTRY_DEPTH();
-
     private Set<List<String>> GCs;
-
-    private Set<String> entrySinkPair;
 
     private PrintWriter pw;
 
@@ -82,7 +78,6 @@ public class StackManger {
         this.instanceOfEnd = new HashMap<>();
         this.instanceOfRet = new HashMap<>();
         this.instanceOfType = new HashMap<>();
-        this.entrySinkPair = new HashSet<>();
         this.hierarchy = World.get().getClassHierarchy();
     }
 
@@ -179,27 +174,7 @@ public class StackManger {
     }
 
     private boolean addGC(List<String> gc) {
-        if (gc.size() > ENTRY_DEPTH) {
-            String pair = getEntrySinkPair(gc);
-            if (entrySinkPair.add(pair)) {
-                GCs.add(gc);
-                return true;
-            } else {
-                return false;
-            }
-        } else {
-            return GCs.add(gc);
-        }
-    }
-
-    private String getEntrySinkPair(List<String> gc) {
-        StringBuilder pair = new StringBuilder();
-        for (int i = 0; i < ENTRY_DEPTH; i++) {
-            pair.append(gc.get(i));
-            pair.append("#");
-        }
-        pair.append(gc.get(gc.size() - 1));
-        return pair.toString();
+        return GCs.add(gc);
     }
 
     private List<String> simplyGC(List<String> gc, Map<String, List<Integer>> tempTCMap, List<Edge> edgeList) {
@@ -388,8 +363,7 @@ public class StackManger {
         List<Edge> subEdgeList = gcEdgeList.subList(toSinkGC.size() - 1, gcEdgeList.size());
         List<String> unSafeGC = getUnSafeGCList(subEdgeList); // 可以用来避免重复操作
         unSafeGC.addAll(toSinkGC);
-        if (gcGraph.containsPath(unSafeGC)
-                || (unSafeGC.size() > ENTRY_DEPTH && entrySinkPair.contains(getEntrySinkPair(unSafeGC)))) return;
+        if (gcGraph.containsPath(unSafeGC)) return;
 
         Map<String, List<Integer>> tempTCMap = backPropagate(subEdgeList, tcList);
         if (tempTCMap.isEmpty()) return;

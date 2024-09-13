@@ -64,8 +64,27 @@ public class ContrUtil {
     }
 
     public static boolean needUpdateInMerge(String oldV, String newV) {
-        if (oldV == null) return !newV.equals(sNOT_POLLUTED);
-        else return string2Int(oldV) == iNOT_POLLUTED && string2Int(newV) != iNOT_POLLUTED;
+        if (oldV == null) {
+            return !newV.equals(sNOT_POLLUTED);
+        } else if (isControllable(oldV) && isControllable(newV)) {
+            return hasCS(newV);
+        } else {
+            return string2Int(oldV) == iNOT_POLLUTED && string2Int(newV) != iNOT_POLLUTED;
+        }
+    }
+
+    private static boolean hasCS(String value) {
+        if (value.contains("+")) {
+            String[] parts = value.split("\\+");
+            for (String part : parts) {
+                if (isConstString(part)) {
+                    return true;
+                }
+            }
+            return false;
+        } else {
+            return isConstString(value);
+        }
     }
 
     public static boolean needUpdateInConcat(String left, String right) {
@@ -90,6 +109,10 @@ public class ContrUtil {
 
     public static boolean isCallSite(String value) {
         return string2Int(value) >= iTHIS;
+    }
+
+    private static boolean isConstString(String value) {
+        return !isControllable(value) && !value.equals(sNOT_POLLUTED);
     }
 
     public static String convert2Reg(String v) {
