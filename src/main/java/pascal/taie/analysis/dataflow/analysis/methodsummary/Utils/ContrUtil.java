@@ -154,4 +154,8 @@ public class ContrUtil {
             return false;
         }
     }
+
+    public static boolean allControllable(List<Integer> values) {
+        return !values.contains(iNOT_POLLUTED);
+    }
 }

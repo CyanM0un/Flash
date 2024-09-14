@@ -67,27 +67,7 @@ public class GadgetChainGraph {
         visited.remove(current);
     }
 
-    public boolean containsPath(List<String> path) {
-        int size = path.size();
-        for (int i = 0; i < size; i++) {
-            String node = path.get(i);
-            if (!adjList.containsKey(node)) return false;
-            if (i != size - 1 && !adjList.get(node).containsNext(path.get(i + 1))) return false;
-        }
-        return true;
-    }
-
-    public void updateTC(String key, List<Integer> tc, String sink) {
-        if (adjList.containsKey(key)) { // source not exist
-            adjList.get(key).updateTC(sink, tc);
-        }
-    }
-
-    public boolean containsTC(String key) {
-        return adjList.containsKey(key) && adjList.get(key).containsTC();
-    }
-
-    public List<Integer> getTCList(String caller, String sink) {
-        return adjList.get(caller).getTC(sink);
+    public boolean containsNode(String key) {
+        return adjList.containsKey(key);
     }
 }
