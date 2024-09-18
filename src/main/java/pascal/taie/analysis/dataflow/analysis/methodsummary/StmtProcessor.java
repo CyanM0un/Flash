@@ -99,12 +99,11 @@ public class StmtProcessor {
     private void updateContr(Pointer k, Contr v) {
         if (k!= null && v != null && curMethod.equals(getPointerMethod(k))) {
             drivenMap.update(k, v);
-            if (v.isReQuery()) v.setReQuery(false);
         }
     }
 
     private boolean containsContr(Pointer p) {
-        return drivenMap.contains(p) && !drivenMap.get(p).isReQuery();
+        return drivenMap.contains(p);
     }
 
     public void addPFGEdge(CSObj from, Pointer to, FlowKind kind, int lineNumber) {
@@ -137,7 +136,8 @@ public class StmtProcessor {
     private void varsToReQuery(Pointer p, HashSet<Pointer> visited) { // drivenMap会缓存结果，如果缓存的变量新增加了指向边，则需要重新查询
         if (Objects.equals(getPointerMethod(p), curMethod) && visited.add(p)) {
             if (drivenMap.contains(p)) {
-                drivenMap.get(p).setReQuery(true);
+                drivenMap.remove(p);
+                updateContr(p, getContr(p));
             }
             for (PointerFlowEdge outEdge : p.getOutEdges()) {
                 varsToReQuery(outEdge.target(), visited);
@@ -560,13 +560,8 @@ public class StmtProcessor {
                 if (value.contains("-")) {
                     String fieldName = Strings.extractFieldName(value);
                     JField field = base.getVar().getClassField(fieldName);
-                    if (field == null) {
-                        origin = null;
-                        contrValue = ContrUtil.sNOT_POLLUTED;
-                    } else {
-                        origin = csManager.getInstanceField(base, field);
-                        contrValue = ContrUtil.isControllable(baseValue) ? baseValue + "-" + fieldName : baseValue;
-                    }
+                    origin = field == null ? base : csManager.getInstanceField(base, field);
+                    contrValue = ContrUtil.isControllable(baseValue) ? baseValue + "-" + fieldName : baseValue;
                 } else {
                     origin = base;
                     contrValue = baseValue;
@@ -670,9 +665,13 @@ public class StmtProcessor {
                         }
                         if (!processAlias(source, matchEdges, pt, pfe.getLineNumber())) {
                             Contr baseContr = getContr(base);
-                            if (ContrUtil.isControllable(baseContr) && !contr.isTransient() && contr.isSerializable()) {
-                                if (fieldName.equals("this$0")) contr.updateValue(baseContr.getValue()); // Class.this的一种访问形式
-                                else contr.updateValue(baseContr.getValue() + "-" +fieldName);
+                            if (ContrUtil.isControllable(baseContr)) {
+                                if (source instanceof ArrayIndex) {
+                                    contr.updateValue(baseContr.getValue() + "-" + fieldName);
+                                } else if (contr.isSerializable() && !contr.isTransient()) {
+                                    if (fieldName.equals("this$0")) contr.updateValue(baseContr.getValue()); // Class.this的一种访问形式
+                                    else contr.updateValue(baseContr.getValue() + "-" +fieldName);
+                                }
                             }
                             pt.add(base, contr);
                         }
@@ -839,19 +838,21 @@ public class StmtProcessor {
                 }
                 case "get" -> {
                     int getIdx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
-                    if (ContrUtil.isControllable(csContr.get(getIdx)) && stmt.getResult() != null) {
+                    String fromValue = csContr.get(getIdx);
+                    if (ContrUtil.isControllable(fromValue) && stmt.getResult() != null) {
                         Pointer p = csManager.getCSVar(context, stmt.getResult());
                         Contr retContr = getOrAddContr(p);
-                        retContr.setValue("get+polluted");
+                        retContr.setValue("get+" + fromValue);
                         updateContr(p, retContr);
                     }
                 }
                 case "set" -> {
                     int setIdx = InvokeUtils.toInt(imitatedBehavior.get("fromIdx")) + 1;
-                    if (ContrUtil.isControllable(csContr.get(setIdx)) && stmt.getResult() != null) {
+                    String fromValue = csContr.get(setIdx);
+                    if (ContrUtil.isControllable(fromValue) && stmt.getResult() != null) {
                         Pointer p = csManager.getCSVar(context, stmt.getResult());
                         Contr retContr = getOrAddContr(p);
-                        retContr.setValue("set+polluted");
+                        retContr.setValue("set+" + fromValue);
                         updateContr(p, retContr);
                     }
                 }
@@ -891,6 +892,17 @@ public class StmtProcessor {
                         updateContr(base, replacedContr);
                     } catch (Exception e) {
                         throw new RuntimeException(e);
+                    }
+                }
+                case "polluteRec" -> {
+                    List<String> copy = new ArrayList<>();
+                    copy.addAll(csContr);
+                    copy.remove(0);
+                    for (String value : copy) {
+                        if (ContrUtil.isControllable(value) && containsContr(base)) {
+                            drivenMap.get(base).setValue(value);
+                            break;
+                        }
                     }
                 }
             }

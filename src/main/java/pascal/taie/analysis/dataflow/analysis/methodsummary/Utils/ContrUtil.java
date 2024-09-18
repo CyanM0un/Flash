@@ -112,7 +112,7 @@ public class ContrUtil {
     }
 
     private static boolean isConstString(String value) {
-        return !isControllable(value) && !value.equals(sNOT_POLLUTED);
+        return !isControllable(value) && !value.equals(sNOT_POLLUTED) && !value.contains(".");
     }
 
     public static String convert2Reg(String v) {

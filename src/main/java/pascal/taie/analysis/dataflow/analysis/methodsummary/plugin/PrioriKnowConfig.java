@@ -186,6 +186,7 @@ public record PrioriKnowConfig(List<JMethod> sinks,
                                     }
                                 }
                             }
+                            case "polluteRec" -> method.setImitatedBehavior("action", "polluteRec");
                             case "replace" -> method.setImitatedBehavior("action", "replace");
                             case "summary" -> {
                                 ArrayNode summaryValue = (ArrayNode) elem.get("value");

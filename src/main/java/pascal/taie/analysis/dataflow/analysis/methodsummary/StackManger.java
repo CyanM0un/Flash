@@ -162,7 +162,9 @@ public class StackManger {
     }
 
     private boolean addGC(List<Edge> gcEdgeList) {
-        List<String> gc = getGCList(gcEdgeList);
+        List<Edge> copy = new ArrayList<>(gcEdgeList);
+        Collections.reverse(copy);
+        List<String> gc = getGCList(copy);
         return GCs.add(gc);
     }
 

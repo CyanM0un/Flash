@@ -80,12 +80,9 @@ public class SummaryAnalysis extends AbstractDataflowAnalysis<Stmt, ContrFact> {
 
     @Override
     public void meetInto(ContrFact fact, ContrFact target) {
-        Set<Pointer> toQuery = new HashSet<>();
         fact.forEach((p, contr) -> {
             target.update(p, merge(contr, target.get(p)));
-            if (contr.isReQuery()) toQuery.add(p);
         });
-        toQuery.forEach(key -> target.remove(key));
     }
 
     private Contr merge(Contr c1, Contr c2) {
