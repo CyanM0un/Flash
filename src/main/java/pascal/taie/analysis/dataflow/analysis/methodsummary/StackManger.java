@@ -11,6 +11,8 @@ import pascal.taie.analysis.pta.core.cs.element.CSCallSite;
 import pascal.taie.analysis.pta.core.cs.element.CSMethod;
 import pascal.taie.analysis.pta.core.cs.element.CSVar;
 import pascal.taie.analysis.pta.core.cs.element.Pointer;
+import pascal.taie.ir.exp.ConditionExp;
+import pascal.taie.ir.stmt.If;
 import pascal.taie.ir.stmt.Stmt;
 import pascal.taie.language.classes.ClassHierarchy;
 import pascal.taie.language.classes.JMethod;
@@ -37,6 +39,8 @@ public class StackManger {
     private LinkedList<Stmt> ifStack;
 
     private Map<Stmt, JMethod> ifEndMap;
+
+    private Map<Stmt, Set<If>> ifMap;
 
     private static final Logger logger = LogManager.getLogger(StackManger.class);
 
@@ -67,6 +71,7 @@ public class StackManger {
         this.queryStack = new Stack<>();
         this.ifStack = new LinkedList<>();
         this.ifEndMap = new HashMap<>();
+        this.ifMap = new HashMap<>();
         this.gcGraph = new GadgetChainGraph();
         try {
             pw = new PrintWriter(new BufferedWriter(new FileWriter(GC_OUT)));
@@ -114,9 +119,10 @@ public class StackManger {
         return queryStack.contains(pointer);
     }
 
-    public void pushIf(Stmt ifEnd, JMethod method) {
+    public void pushIf(Stmt ifEnd, JMethod method, If ifStart) {
         ifStack.push(ifEnd);
         ifEndMap.put(ifEnd, method);
+        ifMap.computeIfAbsent(ifEnd, k -> new HashSet<>()).add(ifStart);
     }
 
     public boolean isInIf() {
@@ -130,6 +136,16 @@ public class StackManger {
     public void popIf(Stmt stmt) {
         ifStack.remove(stmt);
         ifEndMap.remove(stmt);
+        ifMap.remove(stmt);
+    }
+
+    public Set<ConditionExp> getIfConditions(JMethod m) {
+        Set<ConditionExp> ret = new HashSet<>();
+        Stmt ifEnd = getCurIfEnd();
+        if (ifEndMap.containsKey(ifEnd) && ifEndMap.get(ifEnd).equals(m)) {
+            ifMap.get(ifEnd).forEach(ifStart -> ret.add(ifStart.getCondition()));
+        }
+        return ret;
     }
 
     public Stmt getCurIfEnd() {
@@ -150,6 +166,7 @@ public class StackManger {
         if (gcEdgeList == null || gcEdgeList.isEmpty()) return;
 
         List<String> gcList = getGCList(gcEdgeList);
+        if (gcList == null) return;
         if (!startWithSource(gcEdgeList)) {
             updateToSinkGC(gcList, false);
         } else {
@@ -162,9 +179,8 @@ public class StackManger {
     }
 
     private boolean addGC(List<Edge> gcEdgeList) {
-        List<Edge> copy = new ArrayList<>(gcEdgeList);
-        Collections.reverse(copy);
-        List<String> gc = getGCList(copy);
+        List<String> gc = getGCList(gcEdgeList);
+        if (gc == null) return false;
         return GCs.add(gc);
     }
 
@@ -177,7 +193,7 @@ public class StackManger {
             String subSig = getSubSignature(gadget);
             Edge edge = getEdge(gcEdgeList, gadget);
             if (subSigList.contains(subSig)) {
-                int from = subSigList.indexOf(subSig);
+                int from = subSigList.lastIndexOf(subSig);
                 int end = subSigList.size();
                 Edge fromEdge = simplyGC.get(from - 1);
                 if (fromEdge.getKind() != CallKind.STATIC) {
@@ -188,11 +204,12 @@ public class StackManger {
                         Map<String, List<Integer>> tcMap = recoveryTCMap(sourceEdgeList, tcList);
                         if (tcMap.containsKey(source)) {
                             Lists.clearList(subSigList, from, end);
-                            Lists.clearList(simplyGC, from, end);
-                            CSCallSite csCallSite = (CSCallSite) edge.getCallSite();
+                            Lists.clearList(simplyGC, from - 1, end);
+                            CSCallSite csCallSite = (CSCallSite) fromEdge.getCallSite();
                             CSMethod csCallee = csCallGraph.getCSMethod(gadget);
-                            edge = new Edge<>(edge.getKind(), csCallSite, csCallee, edge.getCSContr(), edge.getLineNo());
-                            csCallGraph.addEdge(edge);
+                            Edge replaceEdge = new Edge<>(fromEdge.getKind(), csCallSite, csCallee, fromEdge.getCSContr(), fromEdge.getLineNo());
+                            csCallGraph.addEdge(replaceEdge);
+                            simplyGC.add(replaceEdge);
                         }
                     }
                 }
@@ -295,13 +312,21 @@ public class StackManger {
 
     private List<String> getGCList(List<Edge> edgeList) {
         ArrayList<String> gc = new ArrayList<>();
+        List<Edge> copy = new ArrayList<>(edgeList);
+        Collections.reverse(copy);
         int edgeListSize = edgeList.size();
         for (int i = 0; i < edgeListSize; i++) {
-            JMethod m = CSCallGraph.getCaller(edgeList.get(i));
+            Edge edge = copy.get(i);
+            if (edge.isFilterInvoke() && i != 0) {
+                Edge before = copy.get(i - 1);
+                String filter = edge.getFilterInvoke();
+                String invokeTarget = ((CSCallSite) before.getCallSite()).getCallSite().getInvokeExp().getMethodRef().getName();
+                if (!invokeTarget.equals(filter)) return null;
+            }
+            JMethod m = CSCallGraph.getCaller(edge);
             String key = m.toString();
             gc.add(key);
         }
-        Collections.reverse(gc);
         gc.add(CSCallGraph.getCallee(edgeList.get(0)).toString());
         return gc;
     }
@@ -352,6 +377,7 @@ public class StackManger {
 
             gcEdgeList.addAll(sourceEdgeList);
             List<String> gc = getGCList(gcEdgeList);
+            if (gc == null) return;
             if (!startWithSource(gcEdgeList)) {
                 updateToSinkGC(gc, false);
             } else {

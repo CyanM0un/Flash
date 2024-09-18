@@ -48,12 +48,15 @@ public class Edge<CallSite, Method> {
 
     private final Integer lineNumber;
 
+    private String filterInvoke;
+
     public Edge(CallKind kind, CallSite callSite, Method callee, List<String> csContr, Integer lineNumber) {
         this.kind = kind;
         this.callSite = callSite;
         this.callee = callee;
         this.csContr = csContr;
         this.lineNumber = lineNumber;
+        this.filterInvoke = "";
         hashCode = Hashes.hash(kind, callSite, callee, csContr);
     }
 
@@ -122,5 +125,17 @@ public class Edge<CallSite, Method> {
 
     public Integer getLineNo() {
         return lineNumber;
+    }
+
+    public void setFilterInvoke(String mName) {
+        filterInvoke = mName;
+    }
+
+    public boolean isFilterInvoke() {
+        return !filterInvoke.equals("");
+    }
+
+    public String getFilterInvoke() {
+        return filterInvoke;
     }
 }

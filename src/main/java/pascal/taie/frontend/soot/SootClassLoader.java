@@ -85,7 +85,8 @@ public class SootClassLoader implements JClassLoader {
                     if (sources.contains(m.getSignature()) ||
                             (sources.contains("serializable") && readSubSigList.contains(m.getSubsignature().toString()))) {
                         World.get().addGCEntry(m);
-                    } else if (m.getSubsignature().toString().equals(invokeSubSig) && isInvokeImpl) {
+                    }
+                    if (m.getSubsignature().toString().equals(invokeSubSig) && isInvokeImpl) {
                         World.get().addInvocationHandlerMethod(m);
                     }
                 });

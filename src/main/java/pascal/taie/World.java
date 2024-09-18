@@ -219,6 +219,7 @@ public final class World extends AbstractResultHolder
 
     public void addInvocationHandlerMethod(JMethod m) {
         invocationHandlerMethods.add(m);
+        m.setInvoke();
     }
 
     public Set<JMethod> getInvocationHandlerMethod() {

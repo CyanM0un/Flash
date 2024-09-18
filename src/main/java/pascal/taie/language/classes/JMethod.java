@@ -24,6 +24,7 @@ package pascal.taie.language.classes;
 
 import pascal.taie.World;
 import pascal.taie.analysis.dataflow.analysis.methodsummary.plugin.TaintTransfer;
+import pascal.taie.analysis.pta.core.cs.element.CSVar;
 import pascal.taie.frontend.cache.CachedIRBuilder;
 import pascal.taie.ir.IR;
 import pascal.taie.ir.IRBuildHelper;
@@ -33,7 +34,6 @@ import pascal.taie.language.annotation.AnnotationHolder;
 import pascal.taie.language.generics.MethodGSignature;
 import pascal.taie.language.type.ClassType;
 import pascal.taie.language.type.Type;
-import pascal.taie.util.AnalysisException;
 import pascal.taie.util.Experimental;
 
 import javax.annotation.Nullable;
@@ -91,6 +91,10 @@ public class JMethod extends ClassMember {
 
     private Map<String, String> summary;
 
+    private boolean isInvoke;
+
+    private Map<CSVar, String> invokeDispatch;
+
     public JMethod(JClass declaringClass, String name, Set<Modifier> modifiers,
                    List<Type> paramTypes, Type returnType, List<ClassType> exceptions,
                    @Nullable MethodGSignature gSignature,
@@ -114,6 +118,8 @@ public class JMethod extends ClassMember {
         this.isIgnored = false;
         this.imitatedBehavior = new HashMap<>();
         this.summary = new HashMap<>();
+        this.isInvoke = false;
+        this.invokeDispatch = new HashMap<>();
     }
 
     public boolean isAbstract() {
@@ -289,4 +295,19 @@ public class JMethod extends ClassMember {
         return !summary.isEmpty();
     }
 
+    public void setInvoke() {
+        isInvoke = true;
+    }
+
+    public boolean isInvoke() {
+        return isInvoke;
+    }
+
+    public void addInvokeDispatch(CSVar var, String mName) {
+        invokeDispatch.put(var, mName);
+    }
+
+    public String getInvokeDispatch(CSVar var) {
+        return invokeDispatch.getOrDefault(var, null);
+    }
 }

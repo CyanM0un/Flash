@@ -64,12 +64,6 @@ public class SummaryAnalysis extends AbstractDataflowAnalysis<Stmt, ContrFact> {
             CSObj csContrThis = ContrUtil.getObj(csThisVar, ContrUtil.sTHIS, heapModel, context, csManager);
             stmtProcessor.addPFGEdge(csContrThis, csThisVar, FlowKind.NEW_CONTR, cfg.getEntry().getLineNumber());
         }
-        // 顺序处理前前先行处理所有的new语句
-        cfg.getIR().forEach(stmt -> {
-            if (stmt instanceof New) {
-                stmtProcessor.process(stmt);
-            }
-        });
         return newInitialFact();
     }
 
@@ -100,7 +94,7 @@ public class SummaryAnalysis extends AbstractDataflowAnalysis<Stmt, ContrFact> {
     public boolean transferNode(Stmt stmt, ContrFact in, ContrFact out) {
         ContrFact newIn = in.copy();
         stmtProcessor.setFact(newIn);
-        if (!(stmt instanceof New))stmtProcessor.process(stmt);
+        stmtProcessor.process(stmt);
         return out.copyFrom(stmtProcessor.getFact());
     }
 

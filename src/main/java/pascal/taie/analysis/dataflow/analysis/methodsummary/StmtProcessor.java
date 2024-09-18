@@ -127,6 +127,7 @@ public class StmtProcessor {
     private void addWL(Invoke stmt, JMethod callee, List<String> edgeContr) {
         if (!isIgnored(callee) && (callee.isSink() || (!callee.isTransfer() && !callee.hasImitatedBehavior()))) {
             Edge callEdge = getCallEdge(stmt, callee, edgeContr);
+            filterInvoke(stmt, callEdge, edgeContr);
             boolean inStack = stackManger.containsMethod(callee);
             if (csCallGraph.addEdge(callEdge)) stackManger.pushCallEdge(callEdge, inStack);
             if (!inStack) AnalysisManager.runMethodAnalysis(callee);
@@ -285,8 +286,8 @@ public class StmtProcessor {
         public Void visit(If stmt) {
             CSVar ifVar = csManager.getCSVar(context, stmt.getCondition().getOperand1()); // 一般都是左值，当然也可以都检测一下
             Contr ifContr = getContr(ifVar);
-            if (ContrUtil.isControllable(ifContr)) {
-                stackManger.pushIf(stmt.getTarget(), curMethod);
+            if (ContrUtil.isControllable(ifContr) || curMethod.getInvokeDispatch(ifVar) != null) {
+                stackManger.pushIf(stmt.getTarget(), curMethod, stmt);
             } else if (stackManger.containsInstanceOfRet(ifVar)) {
                 Pointer p = stackManger.removeInstanceOfRet(ifVar);
                 Var cmpVar = stmt.getCondition().getOperand2();
@@ -376,9 +377,13 @@ public class StmtProcessor {
             }
             for (JMethod callee : callees) {
                 if (isIgnored(callee)) continue;
-                if (stackManger.containsMethod(callee)) {
-                    if (retContr != null) retContr.setValue(csContr.get(0)); // 处理递归导致的忽略问题, 暂时没有更好的方法
-                    continue;
+                if (stackManger.containsMethod(callee) && retContr != null) { // 处理递归导致的忽略问题, 暂时没有更好的方法
+                    for (String contr : csContr) {
+                        if (ContrUtil.isControllable(contr)) {
+                            retContr.setValue(contr);
+                            break;
+                        }
+                    }
                 }
                 Map<String, String> summary = callee.getSummaryMap();
                 for (String sKey : summary.keySet()) {
@@ -432,12 +437,15 @@ public class StmtProcessor {
     private boolean isIgnored(JMethod method) {
         return method == null ||
                 method.isIgnored() ||
-                (method.getDeclaringClass().getName().equals("java.lang.String") && isIgnored(method.getReturnType()) && !method.getSummaryMap().isEmpty());
+                (method.getDeclaringClass().getName().equals("java.lang.String")
+                        && isIgnored(method.getReturnType())
+                        && method.getSummaryMap().isEmpty()
+                        && !method.getName().equals("equals"));
     }
 
     private boolean isIgnoredCallSite(List<String> csContr, JMethod ref, Type containerType) {
         if (!ref.isConstructor() && ref.getParamTypes().stream().anyMatch(p -> p.getName().equals("java.lang.String"))) return false; // 字符串操作？
-        else if (ref.getName().equals("equals") && !ContrUtil.isControllable(csContr.get(1))) return true;
+        else if (ref.getName().equals("equals") && !ref.getDeclaringClass().getName().equals("java.lang.String") && !ContrUtil.isControllable(csContr.get(1))) return true;
         else if (typeSystem.isSubtype(typeSystem.getType("java.io.ObjectInputStream"), containerType)
                 && csContr.get(0).startsWith(ContrUtil.sTHIS)) return true;
         else return csContr.stream().allMatch(s -> !ContrUtil.isControllable(s));
@@ -480,10 +488,9 @@ public class StmtProcessor {
                 }
                 return query;
             } else if (p instanceof CSVar var // 处理常量字符串
-                    && var.getVar().isConst()
-                    && var.getVar().getConstValue() instanceof StringLiteral s) {
+                    && getConstString(var.getVar()) != null) {
                 Contr cs = Contr.newInstance(p);
-                cs.setConstString(s.getString());
+                cs.setConstString(getConstString(var.getVar()));
                 updateContr(p, cs);
                 return cs;
             } else {
@@ -513,6 +520,14 @@ public class StmtProcessor {
             }
         } else {
             return contr.getType();
+        }
+    }
+
+    private String getConstString(Var var) {
+        if (var.isConst() && var.getConstValue() instanceof StringLiteral s) {
+            return s.getString();
+        } else {
+            return null;
         }
     }
 
@@ -955,6 +970,28 @@ public class StmtProcessor {
                 .filter(method -> ignoredType || typeSystem.isSubtype(type, method.getDeclaringClass().getType()))
                 .filter(method -> !method.isPrivate())
                 .collect(Collectors.toSet());
+    }
+
+    private void filterInvoke(Invoke stmt, Edge callEdge, List<String> edgeContr) {
+        if (curMethod.isInvoke()) {
+            if (stackManger.isInIf()) {
+                stackManger.getIfConditions(curMethod).forEach(condition -> {
+                    CSVar ifVar = csManager.getCSVar(context, condition.getOperand1());
+                    if (getPointerMethod(ifVar).equals(curMethod)) {
+                        String invokeDispatch = curMethod.getInvokeDispatch(ifVar);
+                        if (invokeDispatch != null) {
+                            callEdge.setFilterInvoke(invokeDispatch);
+                        }
+                    }
+                });
+            }
+            List<Var> args = stmt.getInvokeExp().getArgs();
+            if (args.size() != 1 || stmt.getLValue() == null) return;
+            String constString = getConstString(args.get(0));
+            if (edgeContr.get(0).startsWith(ContrUtil.sParam + "-1") && constString != null) {
+                curMethod.addInvokeDispatch(csManager.getCSVar(context, stmt.getLValue()), constString);
+            }
+        }
     }
 
     private void polluteBase(Contr contr) {
