@@ -48,7 +48,7 @@ public class Edge<CallSite, Method> {
 
     private final Integer lineNumber;
 
-    private String filterInvoke;
+    private String filterByCaller;
 
     public Edge(CallKind kind, CallSite callSite, Method callee, List<String> csContr, Integer lineNumber) {
         this.kind = kind;
@@ -56,8 +56,8 @@ public class Edge<CallSite, Method> {
         this.callee = callee;
         this.csContr = csContr;
         this.lineNumber = lineNumber;
-        this.filterInvoke = "";
-        hashCode = Hashes.hash(kind, callSite, callee, csContr);
+        this.filterByCaller = "";
+        hashCode = Hashes.hash(kind, callSite, callee, getCSIntContr());
     }
 
     /**
@@ -127,15 +127,15 @@ public class Edge<CallSite, Method> {
         return lineNumber;
     }
 
-    public void setFilterInvoke(String mName) {
-        filterInvoke = mName;
+    public void setFilterByCaller(String value) {
+        filterByCaller = value;
     }
 
-    public boolean isFilterInvoke() {
-        return !filterInvoke.equals("");
+    public boolean needFilterByCaller() {
+        return !filterByCaller.equals("");
     }
 
-    public String getFilterInvoke() {
-        return filterInvoke;
+    public String getFilterByCaller() {
+        return filterByCaller;
     }
 }

@@ -65,6 +65,8 @@ public class Invoke extends DefinitionStmt<Var, InvokeExp>
      */
     private final JMethod container;
 
+    private String filterByCaller;
+
     public Invoke(JMethod container, InvokeExp invokeExp, @Nullable Var result) {
         this.invokeExp = invokeExp;
         this.result = result;
@@ -73,6 +75,7 @@ public class Invoke extends DefinitionStmt<Var, InvokeExp>
             base.addInvoke(this);
         }
         this.container = container;
+        this.filterByCaller = "";
     }
 
     public Invoke(JMethod container, InvokeExp invokeExp) {
@@ -169,5 +172,17 @@ public class Invoke extends DefinitionStmt<Var, InvokeExp>
         String ret = result == null ? "" : result + " = ";
         return String.format("%s[%d@L%d] %s%s",
                 container, getIndex(), getLineNumber(), ret, invokeExp);
+    }
+
+    public void setFilterByCaller(String filterByCaller) {
+        this.filterByCaller = filterByCaller;
+    }
+
+    public String getFilterByCaller() {
+        return filterByCaller;
+    }
+
+    public boolean isFilterByCaller() {
+        return !filterByCaller.equals("");
     }
 }

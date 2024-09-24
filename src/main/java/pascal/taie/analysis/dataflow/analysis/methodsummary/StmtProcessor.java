@@ -60,6 +60,8 @@ public class StmtProcessor {
 
     private static final Logger logger = LogManager.getLogger(StmtProcessor.class);
 
+    private boolean isFilterNonSerializable =  World.get().getOptions().isFilterNonSerializable();
+
     public StmtProcessor(StackManger stackManger, CSCallGraph callGraph, PointerFlowGraph pointerFlowGraph, HeapModel heapModel, CSManager csManager, Context context) {
         this.drivenMap = new ContrFact();
         this.visitor = new Visitor();
@@ -127,7 +129,7 @@ public class StmtProcessor {
     private void addWL(Invoke stmt, JMethod callee, List<String> edgeContr) {
         if (!isIgnored(callee) && (callee.isSink() || (!callee.isTransfer() && !callee.hasImitatedBehavior()))) {
             Edge callEdge = getCallEdge(stmt, callee, edgeContr);
-            filterInvoke(stmt, callEdge, edgeContr);
+            filterByCaller(stmt, callEdge, edgeContr);
             boolean inStack = stackManger.containsMethod(callee);
             if (csCallGraph.addEdge(callEdge)) stackManger.pushCallEdge(callEdge, inStack);
             if (!inStack) AnalysisManager.runMethodAnalysis(callee);
@@ -403,7 +405,7 @@ public class StmtProcessor {
                             retContr.setValue(retValue);
                         }
                         updateContr(csRet, retContr);
-                    } else if (ContrUtil.isCallSite(sKey)) { // 参数
+                    } else if (ContrUtil.isCallSite(sKey) && !sKey.equals(sValue)) { // 参数
                         Contr toContr = getCallSiteCorrespondContr(sKey, callSiteVars);
                         if (ContrUtil.isCallSite(sValue)) {
                             Contr fromContr = getCallSiteCorrespondContr(sValue, callSiteVars);
@@ -609,7 +611,7 @@ public class StmtProcessor {
             }
         } else {
             ret = Contr.newInstance(origin);
-            if (!ret.isTransient() && ret.isSerializable()) ret.setValue(contrValue);
+            if (!ret.isTransient()) ret.setValue(contrValue);
         }
         return ret;
     }
@@ -683,7 +685,7 @@ public class StmtProcessor {
                             if (ContrUtil.isControllable(baseContr)) {
                                 if (source instanceof ArrayIndex) {
                                     contr.updateValue(baseContr.getValue() + "-" + fieldName);
-                                } else if (contr.isSerializable() && !contr.isTransient()) {
+                                } else if (!contr.isTransient()) {
                                     if (fieldName.equals("this$0")) contr.updateValue(baseContr.getValue()); // Class.this的一种访问形式
                                     else contr.updateValue(baseContr.getValue() + "-" +fieldName);
                                 }
@@ -780,7 +782,6 @@ public class StmtProcessor {
 
     private void processBehavior(JMethod method, Invoke stmt, List<CSVar> callSiteVars, List<String> csContr, CSVar base) {
         Map<String, String> imitatedBehavior = method.getImitatedBehavior();
-        boolean isFilterNonSerializable =  World.get().getOptions().isFilterNonSerializable();
         if (imitatedBehavior.containsKey("jump")) {
             String target = imitatedBehavior.get("jump");
             switch (target) {
@@ -826,7 +827,12 @@ public class StmtProcessor {
                     int pidx = InvokeUtils.toInt(imitatedBehavior.get("paramIdx")) + 1;
                     Contr nameContr = getContr(callSiteVars.get(idx));
                     if (nameContr == null) return;
-                    String nameReg = ContrUtil.convert2Reg(getContrValue(nameContr));
+                    String nameValue = nameContr.getValue();
+                    if (isFilterNonSerializable && !nameContr.isSerializable() && ContrUtil.isThis(nameValue)) return;
+                    if (nameValue.startsWith(ContrUtil.sParam)) {
+                        stmt.setFilterByCaller("edge:" + nameValue);
+                    }
+                    String nameReg = ContrUtil.convert2Reg(nameValue);
                     Contr paramContr = getContr(callSiteVars.get(pidx));
                     boolean expandArg = false;
                     Type expandArgType = null;
@@ -963,7 +969,6 @@ public class StmtProcessor {
     }
 
     private Collection<? extends JMethod> filterCHA(Set<JMethod> methods, Type type, Type refType) {
-        boolean isFilterNonSerializable = World.get().getOptions().isFilterNonSerializable();
         boolean ignoredType = !typeSystem.isSubtype(refType, type); // 消除iterator的transfer副作用
         return methods.stream()
                 .filter(method -> isFilterNonSerializable ? method.getDeclaringClass().isSerializable() : true)
@@ -972,7 +977,7 @@ public class StmtProcessor {
                 .collect(Collectors.toSet());
     }
 
-    private void filterInvoke(Invoke stmt, Edge callEdge, List<String> edgeContr) {
+    private void filterByCaller(Invoke stmt, Edge callEdge, List<String> edgeContr) {
         if (curMethod.isInvoke()) {
             if (stackManger.isInIf()) {
                 stackManger.getIfConditions(curMethod).forEach(condition -> {
@@ -980,7 +985,7 @@ public class StmtProcessor {
                     if (getPointerMethod(ifVar).equals(curMethod)) {
                         String invokeDispatch = curMethod.getInvokeDispatch(ifVar);
                         if (invokeDispatch != null) {
-                            callEdge.setFilterInvoke(invokeDispatch);
+                            callEdge.setFilterByCaller("name:" + invokeDispatch);
                         }
                     }
                 });
@@ -991,6 +996,8 @@ public class StmtProcessor {
             if (edgeContr.get(0).startsWith(ContrUtil.sParam + "-1") && constString != null) {
                 curMethod.addInvokeDispatch(csManager.getCSVar(context, stmt.getLValue()), constString);
             }
+        } else if (stmt.isFilterByCaller()) {
+            callEdge.setFilterByCaller(stmt.getFilterByCaller());
         }
     }
 

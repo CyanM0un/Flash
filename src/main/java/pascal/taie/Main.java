@@ -36,9 +36,8 @@ import pascal.taie.config.PlanConfig;
 import pascal.taie.config.Scope;
 import pascal.taie.frontend.cache.CachedWorldBuilder;
 import pascal.taie.frontend.soot.SootClassLoader;
-import pascal.taie.frontend.soot.SootWorldBuilder;
+import pascal.taie.language.classes.ClassHierarchy;
 import pascal.taie.language.classes.JClass;
-import pascal.taie.language.classes.JMethod;
 import pascal.taie.util.Timer;
 import pascal.taie.util.collection.Lists;
 
@@ -143,12 +142,33 @@ public class Main {
                                 .allMethods()
                                 .count());
                 setSerializable(options.getSources());
+                setPD();
             } catch (InstantiationException | IllegalAccessException |
                     NoSuchMethodException | InvocationTargetException e) {
                 System.err.println("Failed to build world due to " + e);
                 System.exit(1);
             }
         }, "WorldBuilder");
+    }
+
+    private static void setPD() {
+        ClassHierarchy hierarchy = World.get().getClassHierarchy();
+        JClass pd = hierarchy.getClass("java.beans.PropertyDescriptor");
+        for (JClass sub : hierarchy.getAllSubclassesOf(pd)) {
+            if (sub.equals(pd)) continue;
+            sub.getDeclaredMethods().forEach(method -> {
+                String name = method.getName();
+                if (name.contains("get")) {
+                    if (name.contains("ReadMethod")) {
+                        method.setImitatedBehavior("jump", "get");
+                        method.setImitatedBehavior("fromIdx", "-1");
+                    } else if (name.contains("WriteMethod")) {
+                        method.setImitatedBehavior("jump", "set");
+                        method.setImitatedBehavior("fromIdx", "-1");
+                    }
+                }
+            });
+        }
     }
 
     private static void setSerializable(List<String> sources) {

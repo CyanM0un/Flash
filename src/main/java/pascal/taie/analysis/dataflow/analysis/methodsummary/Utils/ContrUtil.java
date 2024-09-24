@@ -47,7 +47,7 @@ public class ContrUtil {
 
     public static int string2Int(String s) {
         try {
-            if (s == null) return iNOT_POLLUTED;
+            if (s == null || s.equals(sNOT_POLLUTED)) return iNOT_POLLUTED;
             else if (s.contains(sPOLLUTED)) return iPOLLUTED;
             else if (s.contains(sTHIS)) return iTHIS;
             else if (s.contains(sParam)) return Strings.extractParamIndex(s);
@@ -73,7 +73,7 @@ public class ContrUtil {
         }
     }
 
-    private static boolean hasCS(String value) {
+    public static boolean hasCS(String value) {
         if (value.contains("+")) {
             String[] parts = value.split("\\+");
             for (String part : parts) {
@@ -109,6 +109,10 @@ public class ContrUtil {
 
     public static boolean isCallSite(String value) {
         return string2Int(value) >= iTHIS;
+    }
+
+    public static boolean isThis(String value) {
+        return string2Int(value) == iTHIS;
     }
 
     private static boolean isConstString(String value) {

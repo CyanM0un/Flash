@@ -18,12 +18,14 @@ import pascal.taie.language.classes.ClassHierarchy;
 import pascal.taie.language.classes.JMethod;
 import pascal.taie.language.type.ReferenceType;
 import pascal.taie.language.type.Type;
+import pascal.taie.util.Strings;
 import pascal.taie.util.collection.Lists;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class StackManger {
@@ -163,10 +165,9 @@ public class StackManger {
     public void recordGC(Edge sinkEdge, JMethod sink) {
         List<Integer> tcList = Arrays.stream(sink.getSink()).boxed().collect(Collectors.toList());
         List<Edge> gcEdgeList = backPropagate(tcList, sinkEdge, edgeStack, 0);
-        if (gcEdgeList == null || gcEdgeList.isEmpty()) return;
+        if (gcEdgeList.isEmpty()) return;
 
         List<String> gcList = getGCList(gcEdgeList);
-        if (gcList == null) return;
         if (!startWithSource(gcEdgeList)) {
             updateToSinkGC(gcList, false);
         } else {
@@ -179,8 +180,9 @@ public class StackManger {
     }
 
     private boolean addGC(List<Edge> gcEdgeList) {
-        List<String> gc = getGCList(gcEdgeList);
-        if (gc == null) return false;
+        List<Edge> copy = new ArrayList<>(gcEdgeList);
+        Collections.reverse(copy);
+        List<String> gc = getGCList(copy);
         return GCs.add(gc);
     }
 
@@ -266,7 +268,9 @@ public class StackManger {
             JMethod caller = CSCallGraph.getCaller(lastEdge);
             if (caller.isSource() || i == edges.size()) break;
             Edge newEdge = edges.get(edges.size() - i - 1);
-            if (caller.getName().equals("<clinit>") || !caller.equals(CSCallGraph.getCallee(newEdge))) return null; // 忽略类加载器
+            if (caller.getName().equals("<clinit>")
+                    || !caller.equals(CSCallGraph.getCallee(newEdge))
+                    || filterByCaller(lastEdge, newEdge)) break; // 忽略类加载器
             tempNewTC = getNewTCList(tempNewTC, newEdge.getCSIntContr());
             if (!ContrUtil.allControllable(tempNewTC)) break;
             edgeList.add(newEdge);
@@ -283,10 +287,33 @@ public class StackManger {
             JMethod caller = CSCallGraph.getCaller(lastEdge);
             if (caller.isSource() || i == edges.size()) break;
             Edge newEdge = edges.get(edges.size() - i - 1);
-            if (caller.getName().equals("<clinit>") || !caller.equals(CSCallGraph.getCallee(newEdge))) return null; // 忽略类加载器
+            if (caller.getName().equals("<clinit>")
+                    || !caller.equals(CSCallGraph.getCallee(newEdge))
+                    || filterByCaller(lastEdge, newEdge)) break; // 忽略类加载器
             edgeList.add(newEdge);
         }
         return edgeList;
+    }
+
+    private boolean filterByCaller(Edge calleeEdge, Edge callerEdge) {
+        if (calleeEdge.needFilterByCaller()) {
+            String filter = calleeEdge.getFilterByCaller();
+            String value = filter.split(":")[1];
+            if (filter.contains("name")) {
+                String invokeTarget = ((CSCallSite) callerEdge.getCallSite()).getCallSite().getInvokeExp().getMethodRef().getName();
+                if (!invokeTarget.equals(value)) return true;
+            } else if (filter.contains("edge")) {
+                int idx = Strings.extractParamIndex(value) + 1;
+                String edgeValue = (String) callerEdge.getCSContr().get(idx);
+                String nameReg = ContrUtil.convert2Reg(edgeValue);
+                boolean hasStar = nameReg.contains("*");
+                Pattern pattern = Pattern.compile(nameReg);
+                String callee = CSCallGraph.getCallee(calleeEdge).getName();
+                boolean match = hasStar ? pattern.matcher(callee).find() : callee.equals(nameReg);
+                if (!match) return true;
+            }
+        }
+        return false;
     }
 
     private Map<String, List<Integer>> recoveryTCMap(List<Edge> edgeList, List<Integer> tcList) {
@@ -312,21 +339,13 @@ public class StackManger {
 
     private List<String> getGCList(List<Edge> edgeList) {
         ArrayList<String> gc = new ArrayList<>();
-        List<Edge> copy = new ArrayList<>(edgeList);
-        Collections.reverse(copy);
-        int edgeListSize = edgeList.size();
-        for (int i = 0; i < edgeListSize; i++) {
-            Edge edge = copy.get(i);
-            if (edge.isFilterInvoke() && i != 0) {
-                Edge before = copy.get(i - 1);
-                String filter = edge.getFilterInvoke();
-                String invokeTarget = ((CSCallSite) before.getCallSite()).getCallSite().getInvokeExp().getMethodRef().getName();
-                if (!invokeTarget.equals(filter)) return null;
-            }
+        for (int i = 0; i < edgeList.size(); i++) {
+            Edge edge = edgeList.get(i);
             JMethod m = CSCallGraph.getCaller(edge);
             String key = m.toString();
             gc.add(key);
         }
+        Collections.reverse(gc);
         gc.add(CSCallGraph.getCallee(edgeList.get(0)).toString());
         return gc;
     }
@@ -368,16 +387,19 @@ public class StackManger {
     private void linkGC(Edge callEdge, Set<List<String>> toSinkGCs, Stack<Edge> edges) {
         for (List<String> toSinkGC : toSinkGCs) {
             List<Edge> gcEdgeList = getEdgeListOfGC(toSinkGC);
+            if (gcEdgeList.isEmpty()) continue;
             Collections.reverse(gcEdgeList);
             List<Integer> tcList = recoveryTCList(toSinkGC.get(0), gcEdgeList);
             if (tcList == null) continue;
 
             List<Edge> sourceEdgeList = backPropagate(tcList, callEdge, edges, toSinkGC.size() - 1);
-            if (sourceEdgeList == null || sourceEdgeList.isEmpty()) continue;
+            if (sourceEdgeList.isEmpty()) continue;
+            Edge calleeEdge = gcEdgeList.get(gcEdgeList.size() - 1);
+            Edge callerEdge = sourceEdgeList.get(0);
+            if (filterByCaller(calleeEdge, callerEdge)) continue;
 
             gcEdgeList.addAll(sourceEdgeList);
             List<String> gc = getGCList(gcEdgeList);
-            if (gc == null) return;
             if (!startWithSource(gcEdgeList)) {
                 updateToSinkGC(gc, false);
             } else {
@@ -441,7 +463,12 @@ public class StackManger {
     private List<Edge> getEdgeListOfGC(List<String> gc) {
         List<Edge> edgeList = new ArrayList<>();
         for (int i = 0; i < gc.size() - 1; i++) {
-            edgeList.add(getEdge(gc.get(i), gc.get(i + 1)));
+            Edge edge = getEdge(gc.get(i), gc.get(i + 1));
+            if (edge.needFilterByCaller() && i != 0) {
+                Edge callerEdge = edgeList.get(i - 1);
+                if (filterByCaller(edge, callerEdge)) return new ArrayList<>();
+            }
+            edgeList.add(edge);
         }
         return edgeList;
     }

@@ -82,8 +82,8 @@ public final class Strings {
     public static String extractFieldName(String s) {
         int _idx = s.indexOf("-");
         String last = s.substring(_idx + 1);
-        if (last.contains("+")) return last.split("\\+")[0];
-        else if (last.contains("-")) return last.substring(last.lastIndexOf("-") + 1);
+        if (last.contains("-")) return last.split("-")[0];
+        else if (last.contains("+")) return last.split("\\+")[0];
         else return last;
     }
 
