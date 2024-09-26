@@ -162,4 +162,22 @@ public class ContrUtil {
     public static boolean allControllable(List<Integer> values) {
         return !values.contains(iNOT_POLLUTED);
     }
+
+    public static String replaceContr(String old, String contr) {
+        if (hasCS(old)) {
+            String[] parts = old.split("\\+");
+            String replace = parts[0];
+            String left = replace;
+            for (int i = 1; i < parts.length; i++) {
+                String right = parts[i];
+                if (needUpdateInConcat(left, right)) {
+                    replace += "+" + (isControllable(right) ? contr : right);
+                    left = right;
+                }
+            }
+            return replace;
+        } else {
+            return contr;
+        }
+    }
 }

@@ -362,6 +362,7 @@ public class StmtProcessor {
                 return null;
             }
             if (ref.isSink()) {
+                if (!checkExtendInstance(ref, base)) return null;
                 addWL(stmt, ref, csContr);
                 return null;
             }
@@ -379,13 +380,16 @@ public class StmtProcessor {
             }
             for (JMethod callee : callees) {
                 if (isIgnored(callee)) continue;
-                if (stackManger.containsMethod(callee) && retContr != null) { // 处理递归导致的忽略问题, 暂时没有更好的方法
-                    for (String contr : csContr) {
-                        if (ContrUtil.isControllable(contr)) {
-                            retContr.setValue(contr);
-                            break;
+                if (stackManger.containsMethod(callee)) { // 处理递归导致的忽略问题, 暂时没有更好的方法
+                    if (retContr != null) {
+                        for (String contr : csContr) {
+                            if (ContrUtil.isControllable(contr)) {
+                                retContr.setValue(contr);
+                                break;
+                            }
                         }
                     }
+                    continue;
                 }
                 Map<String, String> summary = callee.getSummaryMap();
                 for (String sKey : summary.keySet()) {
@@ -430,6 +434,21 @@ public class StmtProcessor {
             }
             return null;
         }
+    }
+
+    private boolean checkExtendInstance(JMethod ref, CSVar base) { // 一些特殊情况，减少误报
+        if (ref.toString().equals("<java.lang.Class: java.lang.Object newInstance()>")) {
+            Contr contr = getContr(base);
+            if (contr != null
+                    && contr.getOrigin() instanceof InstanceField iField
+                    && iField.getField().getGSignature() != null) {
+                String gSignature = iField.getField().getGSignature().toString();
+                if (gSignature.contains("extends")) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     private boolean isIgnored(Type type) {
@@ -558,6 +577,7 @@ public class StmtProcessor {
                             && !baseFact.isCasted()) {
                         processDynamicProxy(stmt, csContr);
                     }
+                    if (ret.isEmpty()) ret.addAll(chaTargets);
                 }
             }
         } else {
@@ -656,7 +676,7 @@ public class StmtProcessor {
                                 if (transfer instanceof SpecialType st) {
                                     Contr contr = from.copy();
                                     contr.setCasted();
-                                    if (typeSystem.isSubtype(contr.getType(), st.getType())) contr.setType(st.getType());
+                                    contr.setType(st.getType());
                                     if (from.isNew()) contr.setValue("new " + st.getType());
                                     pt.add(p, contr);
                                 }
@@ -695,7 +715,12 @@ public class StmtProcessor {
                     }
                     case ELEMENT_STORE -> {
                         Contr arrContr = getOrAddContr(p);
-                        arrContr.addArrElement(getContr(pfe.source()));
+                        if (pfe.source() != null) {
+                            arrContr.addArrElement(getContr(pfe.source()));
+                        } else if (pfe.sourceObj() != null) {
+                            Obj obj = pfe.sourceObj().getObject();
+                            if (obj instanceof MockObj mockObj && mockObj.getDescriptor().string().equals("Controllable")) arrContr.setValue(((ContrAlloc) mockObj.getAllocation()).contr());
+                        }
                         updateContr(p, arrContr);
                         pt.add(p, arrContr);
                     }
@@ -741,7 +766,8 @@ public class StmtProcessor {
                 if (!Objects.equals(getPointerMethod(source), targetMethod) // 如果来源变量不属于当前方法，则参数来源可能不一致
                         && !pt.isEmpty()
                         && ContrUtil.isControllableParam(pt.getMergedContr())) {
-                    pt.setValue(source instanceof InstanceField ? ContrUtil.sTHIS : ContrUtil.sPOLLUTED);
+                    String value = pt.getMergedContr().getValue();
+                    pt.setValue(source instanceof InstanceField ? ContrUtil.replaceContr(value, ContrUtil.sTHIS) : ContrUtil.replaceContr(value, ContrUtil.sPOLLUTED));
                 }
             }
         }
@@ -916,12 +942,12 @@ public class StmtProcessor {
                     }
                 }
                 case "polluteRec" -> {
-                    List<String> copy = new ArrayList<>();
-                    copy.addAll(csContr);
-                    copy.remove(0);
-                    for (String value : copy) {
-                        if (ContrUtil.isControllable(value) && containsContr(base)) {
-                            drivenMap.get(base).setValue(value);
+                    for (int i = 1; i < callSiteVars.size(); i++) {
+                        String contr = csContr.get(i);
+                        if (ContrUtil.isControllable(contr) && containsContr(base)) {
+                            drivenMap.get(base).setValue(contr);
+                            CSObj csFrom = ContrUtil.getObj(callSiteVars.get(i), contr, heapModel, context, csManager);
+                            addPFGEdge(csFrom, base, FlowKind.ELEMENT_STORE, lineNumber);
                             break;
                         }
                     }
