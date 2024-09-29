@@ -78,6 +78,10 @@ public class Contr {
         if (ContrUtil.isSerializableType(type)) this.isSerializable = true;
     }
 
+    public void setSerializable() {
+        this.isSerializable = true;
+    }
+
     public boolean isSerializable() {
         return isSerializable;
     }
@@ -181,6 +185,7 @@ public class Contr {
         if (isNew) copy.setNew();
         if (isTransient) copy.setTransient();
         if (!arrayElements.isEmpty()) copy.addArrElement(arrayElements);
+        if (isSerializable) copy.setSerializable();
         return copy;
     }
 

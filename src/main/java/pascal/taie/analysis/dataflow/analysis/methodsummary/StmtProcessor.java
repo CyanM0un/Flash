@@ -368,7 +368,7 @@ public class StmtProcessor {
             }
             callees.addAll(getCallees(stmt, base, csContr, ref.getDeclaringClass().getType()));
             for (JMethod callee : callees) {
-                addWL(stmt, callee, csContr);
+                addWL(stmt, callee, callee.isInvoke() ? getDynamicProxyEdge(csContr) : csContr);
             }
             // 处理返回值以及对参数的影响
             Var ret = stmt.getResult();
@@ -377,6 +377,13 @@ public class StmtProcessor {
             if (ret != null && !isIgnored(ret.getType())) {
                 csRet = csManager.getCSVar(context, ret);
                 retContr = getOrAddContr(csRet);
+                for (CSVar arg : callSiteVars) {
+                    Contr argContr = getContr(arg);
+                    if (argContr != null && argContr.isSerializable()) {
+                        retContr.setSerializable();
+                        break;
+                    }
+                }
             }
             for (JMethod callee : callees) {
                 if (isIgnored(callee)) continue;
@@ -485,7 +492,17 @@ public class StmtProcessor {
 
     private List<String> getCallSiteContr(List<CSVar> callSiteVars) {
         List<String> list = new ArrayList<>();
-        callSiteVars.forEach(var -> list.add(getContrValue(var)));
+        List<Contr> contrList = new ArrayList<>();
+        callSiteVars.forEach(var -> contrList.add(getContr(var)));
+        Contr baseContr = contrList.get(0);
+        if (ContrUtil.isControllable(baseContr) && isFilterNonSerializable && !baseContr.isSerializable()) {
+            list.add(ContrUtil.sNOT_POLLUTED);
+        } else {
+            list.add(getContrValue(baseContr));
+        }
+        for (int i = 1; i < callSiteVars.size(); i++) {
+            list.add(getContrValue(contrList.get(i)));
+        }
         return list;
     }
 
@@ -571,19 +588,21 @@ public class StmtProcessor {
                 if (chaTargets.size() <= 1) { // 不做过滤
                     ret.addAll(chaTargets);
                 } else {
-                    ret.addAll(filterCHA(chaTargets, baseFact.getType(), refType));
+                    ret.addAll(filterCHA(chaTargets, baseFact, refType));
                     if (stmt.isInterface()
                             && ContrUtil.isCallSite(baseFact.getValue())
                             && !baseFact.isCasted()) {
-                        processDynamicProxy(stmt, csContr);
+                        ret.addAll(World.get().getInvocationHandlerMethod());
                     }
-                    if (ret.isEmpty()) ret.addAll(chaTargets);
                 }
             }
         } else {
             ret.addAll(CallGraphs.resolveCalleesOf(stmt));
         }
-        return ret;
+        Set<JMethod> callees = new HashSet<>(ret.stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet()));
+        return callees;
     }
 
     private Contr getCallSiteCorrespondContr(String value, List<CSVar> callSiteVars) {
@@ -627,7 +646,6 @@ public class StmtProcessor {
             ret = drivenMap.get(origin);
             if (repalce) {
                 ret.setValue(contrValue);
-                drivenMap.remove(origin);
             }
         } else {
             ret = Contr.newInstance(origin);
@@ -872,13 +890,20 @@ public class StmtProcessor {
                     if (recvContr == null) return;
                     Set<JMethod> callees = World.get().filterMethods(nameReg, recvContr.getType(), argTypes, ContrUtil.isControllableParam(recvContr), isFilterNonSerializable, expandArgType); // for example getxxx
                     if (callees.size() > 1) logger.info("[+] possible reflection target size {} from {}", callees.size(), curMethod);
+                    if (nameReg.equals(".*")) callees.addAll(World.get().getInvocationHandlerMethod());
                     for (JMethod callee : callees) {
                         List<String> edgeContr = new ArrayList<>();
                         edgeContr.add(csContr.get(ridx));
-                        if (expandArg) {
-                            callee.getIR().getParams().forEach(p -> edgeContr.add(paramContr.getValue()));
+                        if (callee.isInvoke()) {
+                            edgeContr.add(csContr.get(ridx));
+                            edgeContr.add(nameValue);
+                            edgeContr.add(csContr.get(pidx));
                         } else {
-                            argContrs.forEach(argContr -> edgeContr.add(argContr.getValue()));
+                            if (expandArg) {
+                                callee.getIR().getParams().forEach(p -> edgeContr.add(paramContr.getValue()));
+                            } else {
+                                argContrs.forEach(argContr -> edgeContr.add(argContr.getValue()));
+                            }
                         }
                         addWL(stmt, callee, edgeContr);
                     }
@@ -957,22 +982,20 @@ public class StmtProcessor {
 
     }
 
-    private void processDynamicProxy(Invoke stmt, List<String> csContr) {
-        for (JMethod invoker : World.get().getInvocationHandlerMethod()) {
-            List<String> invoke = new ArrayList<>(); // 适应参数长度
-            invoke.add(csContr.get(0));
-            invoke.add(csContr.get(0));
-            invoke.add(ContrUtil.sNOT_POLLUTED);
-            for (int i = 1; i < csContr.size(); i++) {
-                String v = csContr.get(i);
-                if (ContrUtil.isControllable(v)) {
-                    invoke.add(v);
-                    break;
-                }
+    private List<String> getDynamicProxyEdge(List<String> csContr) {
+        List<String> invokeEdge = new ArrayList<>(); // 适应参数长度
+        invokeEdge.add(csContr.get(0));
+        invokeEdge.add(csContr.get(0));
+        invokeEdge.add(ContrUtil.sNOT_POLLUTED);
+        for (int i = 1; i < csContr.size(); i++) {
+            String v = csContr.get(i);
+            if (ContrUtil.isControllable(v)) {
+                invokeEdge.add(v);
+                break;
             }
-            if (invoke.size() == 3) invoke.add(ContrUtil.sNOT_POLLUTED);
-            addWL(stmt, invoker, invoke);
         }
+        if (invokeEdge.size() == 3) invokeEdge.add(ContrUtil.sNOT_POLLUTED);
+        return invokeEdge;
     }
 
     private boolean same(Pointer p1, Pointer p2) {
@@ -994,10 +1017,11 @@ public class StmtProcessor {
         return false;
     }
 
-    private Collection<? extends JMethod> filterCHA(Set<JMethod> methods, Type type, Type refType) {
+    private Collection<? extends JMethod> filterCHA(Set<JMethod> methods, Contr baseContr, Type refType) {
+        Type type = baseContr.getType();
         boolean ignoredType = !typeSystem.isSubtype(refType, type); // 消除iterator的transfer副作用
         return methods.stream()
-                .filter(method -> isFilterNonSerializable ? method.getDeclaringClass().isSerializable() : true)
+                .filter(method -> isFilterNonSerializable ? (baseContr.isSerializable() ? true : method.getDeclaringClass().isSerializable()) : true)
                 .filter(method -> ignoredType || typeSystem.isSubtype(type, method.getDeclaringClass().getType()))
                 .filter(method -> !method.isPrivate())
                 .collect(Collectors.toSet());
@@ -1017,12 +1041,14 @@ public class StmtProcessor {
                 });
             }
             List<Var> args = stmt.getInvokeExp().getArgs();
-            if (args.size() != 1 || stmt.getLValue() == null) return;
-            String constString = getConstString(args.get(0));
-            if (edgeContr.get(0).startsWith(ContrUtil.sParam + "-1") && constString != null) {
-                curMethod.addInvokeDispatch(csManager.getCSVar(context, stmt.getLValue()), constString);
+            if (args.size() == 1 && stmt.getLValue() != null) {
+                String constString = getConstString(args.get(0));
+                if (edgeContr.get(0).startsWith(ContrUtil.sParam + "-1") && constString != null) {
+                    curMethod.addInvokeDispatch(csManager.getCSVar(context, stmt.getLValue()), constString);
+                }
             }
-        } else if (stmt.isFilterByCaller()) {
+        }
+        if (stmt.isFilterByCaller()) {
             callEdge.setFilterByCaller(stmt.getFilterByCaller());
         }
     }

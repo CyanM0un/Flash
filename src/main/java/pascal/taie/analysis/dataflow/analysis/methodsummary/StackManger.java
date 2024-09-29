@@ -269,13 +269,71 @@ public class StackManger {
             if (caller.isSource() || i == edges.size()) break;
             Edge newEdge = edges.get(edges.size() - i - 1);
             if (caller.getName().equals("<clinit>")
-                    || !caller.equals(CSCallGraph.getCallee(newEdge))
-                    || filterByCaller(lastEdge, newEdge)) break; // 忽略类加载器
+                    || !caller.equals(CSCallGraph.getCallee(newEdge))) break; // 忽略类加载器
             tempNewTC = getNewTCList(tempNewTC, newEdge.getCSIntContr());
             if (!ContrUtil.allControllable(tempNewTC)) break;
             edgeList.add(newEdge);
         }
-        return edgeList;
+        List<Edge> ret = filterEdgeList(edgeList);
+        return ret;
+    }
+
+    private List<Edge> filterEdgeList(List<Edge> edgeList) {
+        List<Edge> ret = new ArrayList<>();
+        for (int i = 0; i < edgeList.size(); i++) {
+            Edge edge = edgeList.get(i);
+            ret.add(edge);
+            if (edge.needFilterByCaller()) {
+                List<Edge> callers = edgeList.subList(i + 1, edgeList.size());
+                List<Edge> temp = filterByCaller(edge, callers);
+                if (temp.size() < callers.size()) {
+                    ret.addAll(temp);
+                    break;
+                }
+            }
+        }
+        return ret;
+    }
+
+    private List<Edge> filterByCaller(Edge edge, List<Edge> callers) {
+        String filter = edge.getFilterByCaller();
+        String value = filter.split(":")[1];
+        List<Edge> empty = new ArrayList<>();
+        if (filter.contains("name")) {
+            if (callers.size() == 0) {
+                return empty;
+            } else {
+                Edge caller = callers.get(0);
+                String invokeTarget = ((CSCallSite) caller.getCallSite()).getCallSite().getInvokeExp().getMethodRef().getName();
+                if (!invokeTarget.equals(value)) {
+                    return empty;
+                } else {
+                    return callers;
+                }
+            }
+        } else {
+            int idx = Strings.extractParamIndex(value) + 1;
+            List<Edge> ret = new ArrayList<>();
+            for (int i = 0; i < callers.size(); i++) {
+                Edge caller = callers.get(i);
+                String edgeValue = (String) caller.getCSContr().get(idx);
+                if (ContrUtil.hasCS(edgeValue) || ContrUtil.isThis(edgeValue)) {
+                    String nameReg = ContrUtil.convert2Reg(edgeValue);
+                    boolean hasStar = nameReg.contains("*");
+                    Pattern pattern = Pattern.compile(nameReg);
+                    String callee = CSCallGraph.getCallee(edge).getName();
+                    boolean match = hasStar ? pattern.matcher(callee).find() : callee.equals(nameReg);
+                    if (match) ret.addAll(callers.subList(i, callers.size()));
+                    break;
+                } else if (ContrUtil.isControllableParam(edgeValue)) {
+                    idx = Strings.extractParamIndex(edgeValue) + 1;
+                    ret.add(caller);
+                } else {
+                    break;
+                }
+            }
+            return ret;
+        }
     }
 
     private List<Edge> backPropagate(Edge initEdge, Stack<Edge> edges, int sinkLen) {
@@ -288,32 +346,11 @@ public class StackManger {
             if (caller.isSource() || i == edges.size()) break;
             Edge newEdge = edges.get(edges.size() - i - 1);
             if (caller.getName().equals("<clinit>")
-                    || !caller.equals(CSCallGraph.getCallee(newEdge))
-                    || filterByCaller(lastEdge, newEdge)) break; // 忽略类加载器
+                    || !caller.equals(CSCallGraph.getCallee(newEdge))) break; // 忽略类加载器
             edgeList.add(newEdge);
         }
-        return edgeList;
-    }
-
-    private boolean filterByCaller(Edge calleeEdge, Edge callerEdge) {
-        if (calleeEdge.needFilterByCaller()) {
-            String filter = calleeEdge.getFilterByCaller();
-            String value = filter.split(":")[1];
-            if (filter.contains("name")) {
-                String invokeTarget = ((CSCallSite) callerEdge.getCallSite()).getCallSite().getInvokeExp().getMethodRef().getName();
-                if (!invokeTarget.equals(value)) return true;
-            } else if (filter.contains("edge")) {
-                int idx = Strings.extractParamIndex(value) + 1;
-                String edgeValue = (String) callerEdge.getCSContr().get(idx);
-                String nameReg = ContrUtil.convert2Reg(edgeValue);
-                boolean hasStar = nameReg.contains("*");
-                Pattern pattern = Pattern.compile(nameReg);
-                String callee = CSCallGraph.getCallee(calleeEdge).getName();
-                boolean match = hasStar ? pattern.matcher(callee).find() : callee.equals(nameReg);
-                if (!match) return true;
-            }
-        }
-        return false;
+        List<Edge> ret = filterEdgeList(edgeList);
+        return ret;
     }
 
     private Map<String, List<Integer>> recoveryTCMap(List<Edge> edgeList, List<Integer> tcList) {
@@ -355,17 +392,18 @@ public class StackManger {
         String calleeSig = callee.toString();
         if (callee.isSink()) {
             recordGC(callEdge, callee);
-        } else if (callee.hasSummary()) {
-            if (gcGraph.containsNode(calleeSig)) {
-                Set<List<String>> toSinkGCs = gcGraph.collectPath(calleeSig);
-                linkGC(callEdge, toSinkGCs, edgeStack);
-            }
         } else if (isInStack) {
             List<Edge> edgeList = backPropagate(callEdge, edgeStack, 1); // 先存下来，之后再处理
-            if (edgeList != null && !edgeList.isEmpty()) {
+            if (!edgeList.isEmpty()) {
                 Stack<Edge> edges = list2Stack(edgeList);
                 tempGCMap.putIfAbsent(callee, new HashSet<>());
                 tempGCMap.get(callee).add(edges);
+            }
+        } else if (callee.hasSummary()) {
+            if (gcGraph.containsNode(calleeSig)) {
+                Set<List<String>> toSinkGCs = gcGraph.collectPath(calleeSig);
+                Set<List<Edge>> toSinkEdges = getToSinkEdges(toSinkGCs);
+                linkGC(callEdge, toSinkEdges, edgeStack);
             }
         } else {
             edgeStack.push(callEdge);
@@ -376,35 +414,44 @@ public class StackManger {
             if (keyMethod.hasSummary() && gcGraph.containsNode(keySig)) {
                 Set<Stack<Edge>> edgeLists = tempGCMap.remove(keyMethod);
                 Set<List<String>> toSinkGCs = gcGraph.collectPath(keySig);
+                Set<List<Edge>> toSinkEdges = getToSinkEdges(toSinkGCs);
                 edgeLists.forEach(edges -> {
                     Edge edge = edges.pop();
-                    linkGC(edge, toSinkGCs, edges);
+                    linkGC(edge, toSinkEdges, edges);
                 });
             }
         }
     }
 
-    private void linkGC(Edge callEdge, Set<List<String>> toSinkGCs, Stack<Edge> edges) {
+    private Set<List<Edge>> getToSinkEdges(Set<List<String>> toSinkGCs) {
+        Set<List<Edge>> ret = new HashSet<>();
         for (List<String> toSinkGC : toSinkGCs) {
             List<Edge> gcEdgeList = getEdgeListOfGC(toSinkGC);
-            if (gcEdgeList.isEmpty()) continue;
-            Collections.reverse(gcEdgeList);
-            List<Integer> tcList = recoveryTCList(toSinkGC.get(0), gcEdgeList);
+            if (!gcEdgeList.isEmpty()) ret.add(gcEdgeList);
+        }
+        return ret;
+    }
+
+    private void linkGC(Edge callEdge, Set<List<Edge>> toSinkGCs, Stack<Edge> edges) {
+        for (List<Edge> toSinkGC : toSinkGCs) {
+            List<Edge> gcEdgeList = new ArrayList<>(toSinkGC);
+            int gcSize = gcEdgeList.size();
+            List<Integer> tcList = recoveryTCList(CSCallGraph.getCaller(gcEdgeList.get(gcSize - 1)).toString(), gcEdgeList);
             if (tcList == null) continue;
 
-            List<Edge> sourceEdgeList = backPropagate(tcList, callEdge, edges, toSinkGC.size() - 1);
+            List<Edge> sourceEdgeList = backPropagate(tcList, callEdge, edges, gcSize);
             if (sourceEdgeList.isEmpty()) continue;
-            Edge calleeEdge = gcEdgeList.get(gcEdgeList.size() - 1);
-            Edge callerEdge = sourceEdgeList.get(0);
-            if (filterByCaller(calleeEdge, callerEdge)) continue;
 
             gcEdgeList.addAll(sourceEdgeList);
-            List<String> gc = getGCList(gcEdgeList);
-            if (!startWithSource(gcEdgeList)) {
+            List<Edge> filterGCList = filterEdgeList(gcEdgeList);
+            if (filterGCList.size() <= gcSize) continue;
+
+            List<String> gc = getGCList(filterGCList);
+            if (!startWithSource(filterGCList)) {
                 updateToSinkGC(gc, false);
             } else {
                 updateToSinkGC(gc, true);
-                List<Edge> simplyGC = simplyGC(gc, gcEdgeList);
+                List<Edge> simplyGC = simplyGC(gc, filterGCList);
                 if (addGC(simplyGC)) {
                     logAndWriteGC(simplyGC);
                 }
@@ -464,13 +511,11 @@ public class StackManger {
         List<Edge> edgeList = new ArrayList<>();
         for (int i = 0; i < gc.size() - 1; i++) {
             Edge edge = getEdge(gc.get(i), gc.get(i + 1));
-            if (edge.needFilterByCaller() && i != 0) {
-                Edge callerEdge = edgeList.get(i - 1);
-                if (filterByCaller(edge, callerEdge)) return new ArrayList<>();
-            }
             edgeList.add(edge);
         }
-        return edgeList;
+        Collections.reverse(edgeList);
+        List<Edge> filter = filterEdgeList(edgeList);
+        return filter.size() != edgeList.size() ? new ArrayList<>() : edgeList;
     }
 
     private Edge getEdge(String caller, String callee) {

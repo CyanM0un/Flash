@@ -1,10 +1,14 @@
 package pascal.taie.analysis.dataflow.analysis.methodsummary;
 
+import pascal.taie.World;
+
 import java.util.*;
 
 public class GadgetChainGraph {
 
     private Map<String, GadgetChainNode> adjList;
+
+    private static int PATH_MAX_COUNT = World.get().getOptions().getPATH_MAX_COUNT();
 
     public GadgetChainGraph() {
         this.adjList = new HashMap<>();
@@ -40,6 +44,7 @@ public class GadgetChainGraph {
     }
 
     private void dfsCollectPaths(String current, Set<String> visited, List<String> path, Set<List<String>> paths) {
+        if (paths.size() >= PATH_MAX_COUNT || path.contains(current)) return;
         visited.add(current);
         path.add(current);
 

@@ -291,6 +291,15 @@ public class Options implements Serializable {
     }
 
     @JsonProperty
+    @Option(names = {"-pmc", "--PATH_MAX_COUNT"},
+            description = "the max count of collected paths")
+    private int PATH_MAX_COUNT;
+
+    public int getPATH_MAX_COUNT() {
+        return PATH_MAX_COUNT;
+    }
+
+    @JsonProperty
     @Option(names = {"-a", "--analysis"},
             description = "Analyses to be executed",
             paramLabel = "<analysisID[=<options>]>",
@@ -551,6 +560,7 @@ public class Options implements Serializable {
                 ", GC_OUT=" + GC_OUT +
                 ", filterNonSerializable=" + filterNonSerializable +
                 ", GC_MAX_LEN=" + GC_MAX_LEN +
+                ", PATH_MAX_COUNT=" + PATH_MAX_COUNT +
                 ", analyses=" + analyses +
                 ", onlyGenPlan=" + onlyGenPlan +
                 ", keepResult=" + keepResult +

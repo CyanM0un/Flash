@@ -253,13 +253,13 @@ public final class World extends AbstractResultHolder
 
         Type finalClsType = clsType;
         return allMethods()
-                .filter(m -> hasStar ? pattern.matcher(m.getDeclaringClass().getName()).find() : typeSystem.isSubtype(finalClsType, m.getDeclaringClass().getType()))
-                .filter(m -> m.getName().equals(name)
+                .filter(m -> hasStar ? pattern.matcher(m.getDeclaringClass().getName()).find() : m.getName().equals(name))
+                .filter(m -> typeSystem.isSubtype(finalClsType, m.getDeclaringClass().getType())
                         && !m.isAbstract()
                         && !m.isPrivate()
                         && (recSer || m.getDeclaringClass().isSerializable())
                         && (!paramSer || m.getIR().getParams().stream().allMatch(p -> ContrUtil.isSerializableType(p.getType()))))
-                .filter(m -> argTypes.isEmpty() || typeSystem.allSubType(null, argTypes, m.getIR().getParams().stream()
+                .filter(m -> typeSystem.allSubType(null, argTypes, m.getIR().getParams().stream()
                         .map(Var::getType)
                         .collect(Collectors.toList())))
                 .collect(Collectors.toSet());
