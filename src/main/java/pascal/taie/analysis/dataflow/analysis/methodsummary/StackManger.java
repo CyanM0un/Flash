@@ -549,4 +549,8 @@ public class StackManger {
         Map<String, List<Integer>> tcMap = recoveryTCMap(subEdgeList, sinkTC);
         return tcMap.getOrDefault(tcKey, null);
     }
+
+    public int mSize() {
+        return methodStack.size();
+    }
 }

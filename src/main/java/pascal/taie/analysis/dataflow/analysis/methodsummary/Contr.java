@@ -3,13 +3,15 @@ package pascal.taie.analysis.dataflow.analysis.methodsummary;
 import pascal.taie.analysis.dataflow.analysis.methodsummary.Utils.ContrUtil;
 import pascal.taie.analysis.pta.core.cs.element.*;
 import pascal.taie.language.classes.JField;
+import pascal.taie.language.classes.JMethod;
 import pascal.taie.language.classes.Modifier;
 import pascal.taie.language.type.ArrayType;
-import pascal.taie.language.type.ClassType;
 import pascal.taie.language.type.Type;
 import pascal.taie.util.Strings;
 
 import java.util.ArrayList;
+
+import static pascal.taie.analysis.dataflow.analysis.methodsummary.Utils.PUtil.getPointerMethod;
 
 public class Contr {
 
@@ -54,6 +56,8 @@ public class Contr {
             setTransient(sField.getField());
             setSerializable(sField.getField().getType());
         }
+        JMethod m = getPointerMethod(pointer);
+        if (m != null && m.getDeclaringClass().isSerializable() && !isSerializable()) setSerializable();
     }
 
     public static Contr newInstance(Pointer pointer) {

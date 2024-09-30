@@ -95,6 +95,8 @@ public class JMethod extends ClassMember {
 
     private Map<CSVar, String> invokeDispatch;
 
+    private List<String> initEdge;
+
     public JMethod(JClass declaringClass, String name, Set<Modifier> modifiers,
                    List<Type> paramTypes, Type returnType, List<ClassType> exceptions,
                    @Nullable MethodGSignature gSignature,
@@ -309,5 +311,13 @@ public class JMethod extends ClassMember {
 
     public String getInvokeDispatch(CSVar var) {
         return invokeDispatch.getOrDefault(var, null);
+    }
+
+    public void setInitEdge(List<String> csContr) {
+        initEdge = csContr;
+    }
+
+    public List<String> getInitEdge() {
+        return initEdge;
     }
 }

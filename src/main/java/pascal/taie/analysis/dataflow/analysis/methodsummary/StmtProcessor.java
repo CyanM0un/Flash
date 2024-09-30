@@ -32,6 +32,8 @@ import java.lang.reflect.Method;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static pascal.taie.analysis.dataflow.analysis.methodsummary.Utils.PUtil.getPointerMethod;
+
 public class StmtProcessor {
 
     private ContrFact drivenMap; // 需求
@@ -483,13 +485,6 @@ public class StmtProcessor {
         return var.getVar().getName().equals("%this");
     }
 
-    private JMethod getPointerMethod(Pointer p) {
-        if (p instanceof CSVar var) return var.getVar().getMethod();
-        else if (p instanceof InstanceField iField) return iField.getBaseVar().getVar().getMethod();
-        else if (p instanceof ArrayAccess array) return array.getBase().getMethod();
-        else return null;
-    }
-
     private List<String> getCallSiteContr(List<CSVar> callSiteVars) {
         List<String> list = new ArrayList<>();
         List<Contr> contrList = new ArrayList<>();
@@ -778,9 +773,16 @@ public class StmtProcessor {
                 int ifEnd = pointerFlowGraph.getIfRange(matchEdge);
                 JMethod targetMethod = getPointerMethod(matchTarget);
                 if ((ifEnd != -1 && lineNumber >= ifEnd)
-                        || targetMethod == null
-                        || targetMethod.getName().equals("<init>")) continue;
-                if(!ret) ret = pt.add(source, findPointsTo(matchSource).getMergedContr());
+                        || targetMethod == null) continue;
+                Contr aliasContr = findPointsTo(matchSource).getMergedContr();
+                if (targetMethod.getName().equals("<init>")) {
+                    if (!ContrUtil.isControllableParam(aliasContr)) continue;
+                    List<String> initEdge = targetMethod.getInitEdge();
+                    if (initEdge == null) continue;
+                    int idx = Strings.extractParamIndex(aliasContr.getValue());
+                    if (!ContrUtil.isControllable(initEdge.get(idx))) continue;
+                }
+                if(!ret) ret = pt.add(source, aliasContr);
                 if (!Objects.equals(getPointerMethod(source), targetMethod) // 如果来源变量不属于当前方法，则参数来源可能不一致
                         && !pt.isEmpty()
                         && ContrUtil.isControllableParam(pt.getMergedContr())) {
@@ -814,6 +816,7 @@ public class StmtProcessor {
         Contr baseContr = drivenMap.get(base);
         if (baseContr == null) return;
         if (ref.isConstructor()) {
+            ref.setInitEdge(csContr.subList(1, csContr.size()));
             for (int i = 1; i < csContr.size(); i++) {
                 String contr = csContr.get(i);
                 if (ContrUtil.isControllable(contr)) {
@@ -855,6 +858,7 @@ public class StmtProcessor {
                         if (clzName.equals("java.lang.Class")) clzName = "java.lang.Object";
                         callees = World.get().filterMethods("<init>", clzName, argTypes, ContrUtil.isControllableParam(fromContr), isFilterNonSerializable);
                     }
+                    if (callees.size() > 1) logger.info("[+] {} possible init target in {}", callees.size(), curMethod);
                     for (JMethod init : callees) {
                         if (init.isPrivate()) continue;
                         List<String> edgeContr = new ArrayList<>();
@@ -889,7 +893,7 @@ public class StmtProcessor {
                     Contr recvContr = getContr(callSiteVars.get(ridx));
                     if (recvContr == null) return;
                     Set<JMethod> callees = World.get().filterMethods(nameReg, recvContr.getType(), argTypes, ContrUtil.isControllableParam(recvContr), isFilterNonSerializable, expandArgType); // for example getxxx
-                    if (callees.size() > 1) logger.info("[+] possible reflection target size {} from {}", callees.size(), curMethod);
+                    if (callees.size() > 1) logger.info("[+] {} possible invoke target in {}", callees.size(), curMethod);
                     if (nameReg.equals(".*")) callees.addAll(World.get().getInvocationHandlerMethod());
                     for (JMethod callee : callees) {
                         List<String> edgeContr = new ArrayList<>();

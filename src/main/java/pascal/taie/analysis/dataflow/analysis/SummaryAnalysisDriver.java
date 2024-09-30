@@ -1,5 +1,8 @@
 package pascal.taie.analysis.dataflow.analysis;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import pascal.taie.World;
 import pascal.taie.analysis.MethodAnalysis;
 import pascal.taie.analysis.dataflow.analysis.methodsummary.ContrFact;
 import pascal.taie.analysis.dataflow.analysis.methodsummary.StackManger;
@@ -42,6 +45,12 @@ public class SummaryAnalysisDriver extends MethodAnalysis<DataflowResult<Stmt, C
 
     private CompositePlugin plugin;
 
+    private long allMethod = World.get().allMethods().count();
+
+    private long analyzedMethod;
+
+    private static final Logger logger = LogManager.getLogger(SummaryAnalysisDriver.class);
+
     public SummaryAnalysisDriver(AnalysisConfig config) {
         super(config);
         this.heapModel = new AllocationSiteBasedModel(getOptions());
@@ -52,6 +61,7 @@ public class SummaryAnalysisDriver extends MethodAnalysis<DataflowResult<Stmt, C
         this.pointerFlowGraph = new PointerFlowGraph(csManager);
         this.solver = Solver.getSolver();
         setPlugin(getOptions());
+        analyzedMethod = 0;
     }
 
     private void setPlugin(AnalysisOptions options) {
@@ -83,6 +93,10 @@ public class SummaryAnalysisDriver extends MethodAnalysis<DataflowResult<Stmt, C
         analysis.complementSummary();
         stackManger.popMethod();
         if (!method.hasSummary()) method.setSummary("return", "null");
+        analyzedMethod += 1;
+        if (analyzedMethod % 5000 == 0) {
+            logger.info("have analyzed {} methods, remaining {} methods in stack, all {} methods", analyzedMethod, stackManger.mSize(), allMethod);
+        }
         return ret;
     }
 
