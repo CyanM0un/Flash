@@ -95,7 +95,7 @@ public class SummaryAnalysisDriver extends MethodAnalysis<DataflowResult<Stmt, C
         if (!method.hasSummary()) method.setSummary("return", "null");
         analyzedMethod += 1;
         if (analyzedMethod % 5000 == 0) {
-            logger.info("have analyzed {} methods, remaining {} methods in stack, all {} methods", analyzedMethod, stackManger.mSize(), allMethod);
+            logger.info("[+] have analyzed {} methods, remaining {} methods in stack, {} methods may need analysis", analyzedMethod, stackManger.mSize(), allMethod - analyzedMethod - stackManger.mSize());
         }
         return ret;
     }

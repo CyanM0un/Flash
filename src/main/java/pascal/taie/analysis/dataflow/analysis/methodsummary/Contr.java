@@ -136,6 +136,10 @@ public class Contr {
                 last = this.value.substring(this.value.lastIndexOf("+") + 1);
             } else {
                 last = this.value;
+                if (!ContrUtil.hasCS(last) && (ContrUtil.isControllable(value) || ContrUtil.hasCS(value))) {
+                    setValue(value);
+                    return;
+                }
             }
             if (ContrUtil.needUpdateInConcat(last, value)) {
                 this.value = this.value + "+" + value;

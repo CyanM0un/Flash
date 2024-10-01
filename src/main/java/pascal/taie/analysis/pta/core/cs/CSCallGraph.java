@@ -80,6 +80,10 @@ public class CSCallGraph extends AbstractCallGraph<CSCallSite, CSMethod> {
         return edge.getCallee().getMethod();
     }
 
+    public static JMethod getInvokeRef(Edge<CSCallSite, CSMethod> edge) {
+        return edge.getCallSite().getCallSite().getInvokeExp().getMethodRef().resolve();
+    }
+
     /**
      * Adds a new call graph edge to this call graph.
      *

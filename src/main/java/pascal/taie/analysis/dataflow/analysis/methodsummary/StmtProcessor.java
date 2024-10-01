@@ -130,7 +130,8 @@ public class StmtProcessor {
 
     private void addWL(Invoke stmt, JMethod callee, List<String> edgeContr) {
         if (!isIgnored(callee) && (callee.isSink() || (!callee.isTransfer() && !callee.hasImitatedBehavior()))) {
-            Edge callEdge = getCallEdge(stmt, callee, edgeContr);
+            List<Type> edgeType = getCallSiteType(stmt);
+            Edge callEdge = getCallEdge(stmt, callee, edgeContr, edgeType);
             filterByCaller(stmt, callEdge, edgeContr);
             boolean inStack = stackManger.containsMethod(callee);
             if (csCallGraph.addEdge(callEdge)) stackManger.pushCallEdge(callEdge, inStack);
@@ -346,16 +347,10 @@ public class StmtProcessor {
                 processTransfer(ref.getTransfer(), stmt);
                 return null;
             }
-            CSVar base = null;
-            List<CSVar> callSiteVars = invokeExp.getArgs().stream()
-                    .map(arg -> csManager.getCSVar(context, arg))
-                    .collect(Collectors.toList());
+            List<CSVar> callSiteVars = getCallsiteVars(invokeExp);
+            CSVar base = callSiteVars.get(0);
             List<String> csContr;
             Set<JMethod> callees = new HashSet<>();
-            if (invokeExp instanceof InvokeInstanceExp instanceExp) {
-                base = csManager.getCSVar(context, instanceExp.getBase());
-            }
-            callSiteVars.add(0, base);
             csContr = getCallSiteContr(callSiteVars);
             if (isIgnoredCallSite(csContr, ref, stmt.getContainer().getDeclaringClass().getType())) return null;
             processReceiver(ref, base, csContr);
@@ -418,7 +413,7 @@ public class StmtProcessor {
                             retContr.setValue(retValue);
                         }
                         updateContr(csRet, retContr);
-                    } else if (ContrUtil.isCallSite(sKey) && !sKey.equals(sValue)) { // 参数
+                    } else if (ContrUtil.isCallSite(sKey)) { // 参数
                         Contr toContr = getCallSiteCorrespondContr(sKey, callSiteVars);
                         if (ContrUtil.isCallSite(sValue)) {
                             Contr fromContr = getCallSiteCorrespondContr(sValue, callSiteVars);
@@ -443,6 +438,29 @@ public class StmtProcessor {
             }
             return null;
         }
+    }
+
+    private List<Type> getCallSiteType(Invoke stmt) {
+        List<CSVar> csVars = getCallsiteVars(stmt.getInvokeExp());
+        List<Type> ret = new ArrayList<>();
+        csVars.forEach(csVar -> {
+            Contr contr = getContr(csVar);
+            ret.add(contr != null ? contr.getType() : null);
+        });
+        return ret;
+    }
+
+    private List<CSVar> getCallsiteVars(InvokeExp invokeExp) {
+        List<CSVar> vars = new ArrayList<>();
+        invokeExp.getArgs().stream()
+                .map(arg -> csManager.getCSVar(context, arg))
+                .forEach(arg -> vars.add(arg));
+        CSVar base = null;
+        if (invokeExp instanceof InvokeInstanceExp instanceExp) {
+            base = csManager.getCSVar(context, instanceExp.getBase());
+        }
+        vars.add(0, base);
+        return vars;
     }
 
     private boolean checkExtendInstance(JMethod ref, CSVar base) { // 一些特殊情况，减少误报
@@ -490,7 +508,7 @@ public class StmtProcessor {
         List<Contr> contrList = new ArrayList<>();
         callSiteVars.forEach(var -> contrList.add(getContr(var)));
         Contr baseContr = contrList.get(0);
-        if (ContrUtil.isControllable(baseContr) && isFilterNonSerializable && !baseContr.isSerializable()) {
+        if (ContrUtil.isControllable(baseContr) && isFilterNonSerializable && !baseContr.isSerializable() && !baseContr.isNew()) {
             list.add(ContrUtil.sNOT_POLLUTED);
         } else {
             list.add(getContrValue(baseContr));
@@ -564,10 +582,10 @@ public class StmtProcessor {
         }
     }
 
-    private Edge getCallEdge(Invoke callSite, JMethod callee, List<String> csContr) {
+    private Edge getCallEdge(Invoke callSite, JMethod callee, List<String> csContr, List<Type> edgeType) {
         CSCallSite csCallSite = csManager.getCSCallSite(context, callSite);
         CSMethod csCallee = csManager.getCSMethod(context, callee);
-        return new Edge<>(CallGraphs.getCallKind(callSite), csCallSite, csCallee, csContr, lineNumber);
+        return new Edge<>(CallGraphs.getCallKind(callSite), csCallSite, csCallee, csContr, lineNumber, edgeType);
     }
 
     private Set<JMethod> getCallees(Invoke stmt, CSVar base, List<String> csContr, Type refType) {

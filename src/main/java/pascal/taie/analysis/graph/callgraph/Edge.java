@@ -23,6 +23,7 @@
 package pascal.taie.analysis.graph.callgraph;
 
 import pascal.taie.analysis.dataflow.analysis.methodsummary.Utils.ContrUtil;
+import pascal.taie.language.type.Type;
 import pascal.taie.util.Hashes;
 
 import java.util.List;
@@ -50,13 +51,16 @@ public class Edge<CallSite, Method> {
 
     private String filterByCaller;
 
-    public Edge(CallKind kind, CallSite callSite, Method callee, List<String> csContr, Integer lineNumber) {
+    private List<Type> typeList;
+
+    public Edge(CallKind kind, CallSite callSite, Method callee, List<String> csContr, Integer lineNumber, List<Type> typeList) {
         this.kind = kind;
         this.callSite = callSite;
         this.callee = callee;
         this.csContr = csContr;
         this.lineNumber = lineNumber;
         this.filterByCaller = "";
+        this.typeList = typeList;
         hashCode = Hashes.hash(kind, callSite, callee, getCSIntContr());
     }
 
@@ -137,5 +141,9 @@ public class Edge<CallSite, Method> {
 
     public String getFilterByCaller() {
         return filterByCaller;
+    }
+
+    public List<Type> getTypeList() {
+        return typeList;
     }
 }

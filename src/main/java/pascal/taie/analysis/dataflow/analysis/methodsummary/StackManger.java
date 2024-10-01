@@ -18,6 +18,7 @@ import pascal.taie.language.classes.ClassHierarchy;
 import pascal.taie.language.classes.JMethod;
 import pascal.taie.language.type.ReferenceType;
 import pascal.taie.language.type.Type;
+import pascal.taie.language.type.TypeSystem;
 import pascal.taie.util.Strings;
 import pascal.taie.util.collection.Lists;
 
@@ -66,6 +67,8 @@ public class StackManger {
 
     private ClassHierarchy hierarchy;
 
+    private TypeSystem typeSystem;
+
     public StackManger(CSCallGraph csCallGraph) {
         this.csCallGraph = csCallGraph;
         this.edgeStack = new Stack<>();
@@ -86,6 +89,7 @@ public class StackManger {
         this.instanceOfRet = new HashMap<>();
         this.instanceOfType = new HashMap<>();
         this.hierarchy = World.get().getClassHierarchy();
+        this.typeSystem = World.get().getTypeSystem();
     }
 
     public void pushMethod(JMethod method) {
@@ -172,6 +176,7 @@ public class StackManger {
             updateToSinkGC(gcList, false);
         } else {
             updateToSinkGC(gcList, true);
+            if (!typeCheck(gcEdgeList)) return;
             List<Edge> simplyGC = simplyGC(gcList, gcEdgeList);
             if (addGC(simplyGC)) {
                 logAndWriteGC(simplyGC);
@@ -184,6 +189,60 @@ public class StackManger {
         Collections.reverse(copy);
         List<String> gc = getGCList(copy);
         return GCs.add(gc);
+    }
+
+    private boolean typeCheck(List<Edge> gcEdgeList) {
+        Edge source = gcEdgeList.get(0);
+        List<Type> paramsType = getParamsType(CSCallGraph.getCallee(source));
+        List<Type> passType = source.getTypeList();
+        if (!allSubType(paramsType, passType)) {
+            return false;
+        }
+
+        for (int i = 1; i < gcEdgeList.size(); i++) {
+            Edge edge = gcEdgeList.get(i);
+            JMethod invokeRef = CSCallGraph.getInvokeRef(edge);
+            if (invokeRef != null && (invokeRef.isInvoke() || invokeRef.hasImitatedBehavior())) return true;
+            JMethod callee = CSCallGraph.getCallee(edge);
+            paramsType = getParamsType(callee);
+            List<Integer> edgeContr = edge.getCSIntContr();
+            passType = getNewPassType(edgeContr, edge.getTypeList(), passType, paramsType);
+
+            if (!allSubType(paramsType, passType)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private List<Type> getNewPassType(List<Integer> edgeContr, List<Type> passType, List<Type> argsType, List<Type> calleeType) {
+        List<Type> ret = new ArrayList<>();
+        for (int i = 0; i < edgeContr.size(); i++) {
+            int c = edgeContr.get(i);
+            if (c > ContrUtil.iTHIS) {
+                ret.add(argsType.get(c + 1));
+            } else if (c == ContrUtil.iTHIS) {
+                ret.add(passType.get(i));
+            } else {
+                ret.add(calleeType.get(i));
+            }
+        }
+        return ret;
+    }
+
+    private boolean allSubType(List<Type> passType, List<Type> paramsType) {
+        for (int j = 0; j < passType.size(); j++) {
+            if (!typeSystem.isSubtype(passType.get(j), paramsType.get(j)) && !typeSystem.isSubtype(paramsType.get(j), passType.get(j))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private List<Type> getParamsType(JMethod method) {
+        List<Type> ret = new ArrayList<>(method.getParamTypes());
+        ret.add(0, method.getDeclaringClass().getType());
+        return ret;
     }
 
     private List<Edge> simplyGC(List<String> gc, List<Edge> gcEdgeList) {
@@ -209,7 +268,7 @@ public class StackManger {
                             Lists.clearList(simplyGC, from - 1, end);
                             CSCallSite csCallSite = (CSCallSite) fromEdge.getCallSite();
                             CSMethod csCallee = csCallGraph.getCSMethod(gadget);
-                            Edge replaceEdge = new Edge<>(fromEdge.getKind(), csCallSite, csCallee, fromEdge.getCSContr(), fromEdge.getLineNo());
+                            Edge replaceEdge = new Edge<>(fromEdge.getKind(), csCallSite, csCallee, fromEdge.getCSContr(), fromEdge.getLineNo(), fromEdge.getTypeList());
                             csCallGraph.addEdge(replaceEdge);
                             simplyGC.add(replaceEdge);
                         }
@@ -451,6 +510,7 @@ public class StackManger {
                 updateToSinkGC(gc, false);
             } else {
                 updateToSinkGC(gc, true);
+                if (!typeCheck(filterGCList)) return;
                 List<Edge> simplyGC = simplyGC(gc, filterGCList);
                 if (addGC(simplyGC)) {
                     logAndWriteGC(simplyGC);

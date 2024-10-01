@@ -100,7 +100,8 @@ public class ContrUtil {
     }
 
     public static boolean isControllableParam(Contr contr) {
-        return isControllableParam(contr.getValue());
+        if (contr == null) return false;
+        else return isControllableParam(contr.getValue());
     }
 
     public static boolean isControllableParam(String value) {

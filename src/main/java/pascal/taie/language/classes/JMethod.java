@@ -282,7 +282,7 @@ public class JMethod extends ClassMember {
     }
 
     public void setSummary(String key, String value) {
-        if (key != null && value != null) summary.put(key, value);
+        if (key != null && value != null && !key.equals(value)) summary.put(key, value);
     }
 
     public String getSummary(String key) {
