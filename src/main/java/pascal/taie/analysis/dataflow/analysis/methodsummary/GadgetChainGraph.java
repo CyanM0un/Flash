@@ -1,5 +1,7 @@
 package pascal.taie.analysis.dataflow.analysis.methodsummary;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import pascal.taie.World;
 
 import java.util.*;
@@ -9,6 +11,10 @@ public class GadgetChainGraph {
     private Map<String, GadgetChainNode> adjList;
 
     private static int PATH_MAX_COUNT = World.get().getOptions().getPATH_MAX_COUNT();
+
+    private static int PATH_COLLECT_TIME = World.get().getOptions().getPATH_COLLECT_TIME();
+
+    private static final Logger logger = LogManager.getLogger(GadgetChainGraph.class);
 
     public GadgetChainGraph() {
         this.adjList = new HashMap<>();
@@ -39,12 +45,15 @@ public class GadgetChainGraph {
         Set<List<String>> paths = new HashSet<>();
         List<String> path = new ArrayList<>();
         Set<String> visited = new HashSet<>();
-        dfsCollectPaths(from, visited, path, paths);
+        long startTime = System.currentTimeMillis();
+        dfsCollectPaths(from, visited, path, paths, startTime);
+//        long endTime = System.currentTimeMillis();
+//        logger.info("collect {} path in {}s", paths.size() , (endTime - startTime) / 1000);
         return paths;
     }
 
-    private void dfsCollectPaths(String current, Set<String> visited, List<String> path, Set<List<String>> paths) {
-        if (paths.size() >= PATH_MAX_COUNT || path.contains(current)) return;
+    private void dfsCollectPaths(String current, Set<String> visited, List<String> path, Set<List<String>> paths, long startTime) {
+        if (paths.size() >= PATH_MAX_COUNT || path.contains(current) || System.currentTimeMillis() - startTime > PATH_COLLECT_TIME) return;
         visited.add(current);
         path.add(current);
 
@@ -64,7 +73,7 @@ public class GadgetChainGraph {
 
         for (String neighbor : adjList.get(current).getNexts()) {
             if (!visited.contains(neighbor)) {
-                dfsCollectPaths(neighbor, visited, path, paths);
+                dfsCollectPaths(neighbor, visited, path, paths, startTime);
             }
         }
 

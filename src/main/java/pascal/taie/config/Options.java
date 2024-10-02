@@ -300,6 +300,15 @@ public class Options implements Serializable {
     }
 
     @JsonProperty
+    @Option(names = {"-pct", "--PATH_COLLECT_TIME"},
+            description = "the max time of collecting paths")
+    private int PATH_COLLECT_TIME;
+
+    public int getPATH_COLLECT_TIME() {
+        return PATH_COLLECT_TIME;
+    }
+
+    @JsonProperty
     @Option(names = {"-a", "--analysis"},
             description = "Analyses to be executed",
             paramLabel = "<analysisID[=<options>]>",
@@ -561,6 +570,7 @@ public class Options implements Serializable {
                 ", filterNonSerializable=" + filterNonSerializable +
                 ", GC_MAX_LEN=" + GC_MAX_LEN +
                 ", PATH_MAX_COUNT=" + PATH_MAX_COUNT +
+                ", PATH_COLLECT_TIME=" + PATH_COLLECT_TIME +
                 ", analyses=" + analyses +
                 ", onlyGenPlan=" + onlyGenPlan +
                 ", keepResult=" + keepResult +
