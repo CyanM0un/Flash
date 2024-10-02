@@ -12,7 +12,7 @@ public class GadgetChainGraph {
 
     private static int PATH_MAX_COUNT = World.get().getOptions().getPATH_MAX_COUNT();
 
-    private static int PATH_COLLECT_TIME = World.get().getOptions().getPATH_COLLECT_TIME();
+    private static int PATH_COLLECT_TIME = World.get().getOptions().getPATH_COLLECT_TIME() * 1000;
 
     private static final Logger logger = LogManager.getLogger(GadgetChainGraph.class);
 
