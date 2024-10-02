@@ -26,8 +26,10 @@ import pascal.taie.analysis.dataflow.analysis.methodsummary.Utils.ContrUtil;
 import pascal.taie.language.type.Type;
 import pascal.taie.util.Hashes;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Represents call edges in the call graph.
@@ -53,6 +55,8 @@ public class Edge<CallSite, Method> {
 
     private List<Type> typeList;
 
+    private Set<Integer> casted;
+
     public Edge(CallKind kind, CallSite callSite, Method callee, List<String> csContr, Integer lineNumber, List<Type> typeList) {
         this.kind = kind;
         this.callSite = callSite;
@@ -61,6 +65,7 @@ public class Edge<CallSite, Method> {
         this.lineNumber = lineNumber;
         this.filterByCaller = "";
         this.typeList = typeList;
+        this.casted = new HashSet<>();
         hashCode = Hashes.hash(kind, callSite, callee, getCSIntContr());
     }
 
@@ -145,5 +150,13 @@ public class Edge<CallSite, Method> {
 
     public List<Type> getTypeList() {
         return typeList;
+    }
+
+    public void setCasted(int i) {
+        casted.add(i);
+    }
+
+    public boolean isCasted(int i) {
+        return casted.contains(i);
     }
 }

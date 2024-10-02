@@ -130,12 +130,23 @@ public class StmtProcessor {
 
     private void addWL(Invoke stmt, JMethod callee, List<String> edgeContr) {
         if (!isIgnored(callee) && (callee.isSink() || (!callee.isTransfer() && !callee.hasImitatedBehavior()))) {
-            List<Type> edgeType = getCallSiteType(stmt);
+            List<CSVar> callSiteVars = getCallsiteVars(stmt.getInvokeExp());
+            List<Contr> callSiteContr = new ArrayList<>();
+            callSiteVars.forEach(csVar -> callSiteContr.add(getContr(csVar)));
+            List<Type> edgeType = getCallSiteType(callSiteContr);
             Edge callEdge = getCallEdge(stmt, callee, edgeContr, edgeType);
             filterByCaller(stmt, callEdge, edgeContr);
+            setEdgeCasted(callEdge, callSiteContr);
             boolean inStack = stackManger.containsMethod(callee);
             if (csCallGraph.addEdge(callEdge)) stackManger.pushCallEdge(callEdge, inStack);
             if (!inStack) AnalysisManager.runMethodAnalysis(callee);
+        }
+    }
+
+    private void setEdgeCasted(Edge callEdge, List<Contr> callSiteContr) {
+        for (int i = 0; i < callSiteContr.size(); i++) {
+            Contr contr = callSiteContr.get(i);
+            if (contr != null && contr.isCasted()) callEdge.setCasted(i);
         }
     }
 
@@ -440,13 +451,9 @@ public class StmtProcessor {
         }
     }
 
-    private List<Type> getCallSiteType(Invoke stmt) {
-        List<CSVar> csVars = getCallsiteVars(stmt.getInvokeExp());
+    private List<Type> getCallSiteType(List<Contr> csContr) {
         List<Type> ret = new ArrayList<>();
-        csVars.forEach(csVar -> {
-            Contr contr = getContr(csVar);
-            ret.add(contr != null ? contr.getType() : null);
-        });
+        csContr.forEach(contr-> ret.add(contr != null ? contr.getType() : null));
         return ret;
     }
 
@@ -508,7 +515,8 @@ public class StmtProcessor {
         List<Contr> contrList = new ArrayList<>();
         callSiteVars.forEach(var -> contrList.add(getContr(var)));
         Contr baseContr = contrList.get(0);
-        if (ContrUtil.isControllable(baseContr) && isFilterNonSerializable && !baseContr.isSerializable() && !baseContr.isNew()) {
+        if (ContrUtil.isControllable(baseContr) && isFilterNonSerializable && !baseContr.isSerializable()
+                && !baseContr.isNew() && !(baseContr.getOrigin() instanceof ArrayIndex)) {
             list.add(ContrUtil.sNOT_POLLUTED);
         } else {
             list.add(getContrValue(baseContr));
@@ -791,15 +799,16 @@ public class StmtProcessor {
                 int ifEnd = pointerFlowGraph.getIfRange(matchEdge);
                 JMethod targetMethod = getPointerMethod(matchTarget);
                 if ((ifEnd != -1 && lineNumber >= ifEnd)
-                        || targetMethod == null) continue;
+                        || targetMethod == null
+                        || targetMethod.getName().equals("<init>")) continue;
                 Contr aliasContr = findPointsTo(matchSource).getMergedContr();
-                if (targetMethod.getName().equals("<init>")) {
-                    if (!ContrUtil.isControllableParam(aliasContr)) continue;
-                    List<String> initEdge = targetMethod.getInitEdge();
-                    if (initEdge == null) continue;
-                    int idx = Strings.extractParamIndex(aliasContr.getValue());
-                    if (!ContrUtil.isControllable(initEdge.get(idx))) continue;
-                }
+//                if (targetMethod.getName().equals("<init>")) {
+//                    if (!ContrUtil.isControllableParam(aliasContr)) continue;
+//                    List<String> initEdge = targetMethod.getInitEdge();
+//                    if (initEdge == null) continue;
+//                    int idx = Strings.extractParamIndex(aliasContr.getValue());
+//                    if (!ContrUtil.isControllable(initEdge.get(idx))) continue;
+//                }
                 if(!ret) ret = pt.add(source, aliasContr);
                 if (!Objects.equals(getPointerMethod(source), targetMethod) // 如果来源变量不属于当前方法，则参数来源可能不一致
                         && !pt.isEmpty()
@@ -1043,7 +1052,7 @@ public class StmtProcessor {
         Type type = baseContr.getType();
         boolean ignoredType = !typeSystem.isSubtype(refType, type); // 消除iterator的transfer副作用
         return methods.stream()
-                .filter(method -> isFilterNonSerializable ? (baseContr.isSerializable() ? true : method.getDeclaringClass().isSerializable()) : true)
+                .filter(method -> isFilterNonSerializable ? method.getDeclaringClass().isSerializable() : true)
                 .filter(method -> ignoredType || typeSystem.isSubtype(type, method.getDeclaringClass().getType()))
                 .filter(method -> !method.isPrivate())
                 .collect(Collectors.toSet());

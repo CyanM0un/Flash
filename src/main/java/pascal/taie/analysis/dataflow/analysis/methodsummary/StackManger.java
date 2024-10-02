@@ -191,19 +191,26 @@ public class StackManger {
         return GCs.add(gc);
     }
 
-    private boolean typeCheck(List<Edge> gcEdgeList) {
+    private boolean typeCheck(List<Edge> edgeList) {
+        List<Edge> gcEdgeList = new ArrayList<>(edgeList);
+        Collections.reverse(gcEdgeList);
         Edge source = gcEdgeList.get(0);
+        JMethod invokeRef = CSCallGraph.getInvokeRef(source);
+        JMethod callee = CSCallGraph.getCallee(source);
+        if (invokeRef.hasImitatedBehavior()) return true;
+        if (callee.isInvoke()) return filterCast(gcEdgeList, 1);
         List<Type> paramsType = getParamsType(CSCallGraph.getCallee(source));
-        List<Type> passType = source.getTypeList();
+        List<Type> passType = getNewPassType(source.getCSIntContr(), source.getTypeList(), paramsType);
         if (!allSubType(paramsType, passType)) {
             return false;
         }
 
         for (int i = 1; i < gcEdgeList.size(); i++) {
             Edge edge = gcEdgeList.get(i);
-            JMethod invokeRef = CSCallGraph.getInvokeRef(edge);
-            if (invokeRef != null && (invokeRef.isInvoke() || invokeRef.hasImitatedBehavior())) return true;
-            JMethod callee = CSCallGraph.getCallee(edge);
+            invokeRef = CSCallGraph.getInvokeRef(edge);
+            callee = CSCallGraph.getCallee(edge);
+            if (invokeRef.hasImitatedBehavior()) return true;
+            if (callee.isInvoke()) return filterCast(gcEdgeList, i + 1);
             paramsType = getParamsType(callee);
             List<Integer> edgeContr = edge.getCSIntContr();
             passType = getNewPassType(edgeContr, edge.getTypeList(), passType, paramsType);
@@ -213,6 +220,33 @@ public class StackManger {
             }
         }
         return true;
+    }
+
+    private boolean filterCast(List<Edge> gcEdgeList, int i) {
+        List<Edge> tempEdgeList = gcEdgeList.subList(0, i);
+        Collections.reverse(tempEdgeList);
+        List<Integer> tc = new ArrayList<>();
+        tc.add(-1);
+        for (Edge tmp : tempEdgeList) {
+            if (tmp.isCasted(tc.get(0) + 1)) {
+                return false;
+            }
+            tc = getNewTCList(tc, tmp.getCSIntContr());
+        }
+        return true;
+    }
+
+    private List<Type> getNewPassType(List<Integer> edgeContr, List<Type> passType, List<Type> paramsType) {
+        List<Type> ret = new ArrayList<>();
+        for (int i = 0; i < edgeContr.size(); i++) {
+            int c = edgeContr.get(i);
+            if (c != ContrUtil.iNOT_POLLUTED) {
+                ret.add(passType.get(i));
+            } else {
+                ret.add(paramsType.get(i));
+            }
+        }
+        return ret;
     }
 
     private List<Type> getNewPassType(List<Integer> edgeContr, List<Type> passType, List<Type> argsType, List<Type> calleeType) {

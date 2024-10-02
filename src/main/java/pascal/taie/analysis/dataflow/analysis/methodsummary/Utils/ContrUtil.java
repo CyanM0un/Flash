@@ -67,7 +67,7 @@ public class ContrUtil {
         if (oldV == null) {
             return !newV.equals(sNOT_POLLUTED);
         } else if (isControllable(oldV) && isControllable(newV)) {
-            return hasCS(newV);
+            return hasCS(newV) && !hasCS(oldV);
         } else {
             return string2Int(oldV) == iNOT_POLLUTED && string2Int(newV) != iNOT_POLLUTED;
         }
