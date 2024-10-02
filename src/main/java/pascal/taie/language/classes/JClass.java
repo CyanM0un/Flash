@@ -95,6 +95,8 @@ public class JClass extends AbstractResultHolder
 
     private boolean isIgnored;
 
+    private boolean methodIgnored;
+
     private int index = -1;
 
     public JClass(JClassLoader loader, String name) {
@@ -119,6 +121,7 @@ public class JClass extends AbstractResultHolder
         isApplication = builder.isApplication();
         isSerializable = false;
         isIgnored = false;
+        methodIgnored = false;
         isPhantom = builder.isPhantom();
         try {
             superClass = builder.getSuperClass();
@@ -408,5 +411,13 @@ public class JClass extends AbstractResultHolder
 
     public void setIgnored() {
         this.isIgnored = true;
+    }
+
+    public boolean isMethodIgnored() {
+        return methodIgnored;
+    }
+
+    public void setMethodIgnored() {
+        this.methodIgnored = true;
     }
 }

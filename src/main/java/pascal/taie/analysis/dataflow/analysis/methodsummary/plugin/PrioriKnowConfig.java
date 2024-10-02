@@ -228,12 +228,15 @@ public record PrioriKnowConfig(List<JMethod> sinks,
                             ignores.add(method);
                         }
                     } else {
-                        String classSig = elem.get("class").asText();
-                        JClass jClass = hierarchy.getClass(classSig);
-                        if (jClass != null) {
-                            jClass.setIgnored();
-                            ignores.add(jClass);
+                        String classSig;
+                        if (elem.get("class") != null) {
+                            classSig = elem.get("class").asText();
+                            hierarchy.getClass(classSig).setIgnored();
+                        } else {
+                            classSig = elem.get("classMethod").asText();
+                            hierarchy.getClass(classSig).setMethodIgnored();
                         }
+                        ignores.add(hierarchy.getClass(classSig));
                     }
                 }
                 return Collections.unmodifiableList(ignores);

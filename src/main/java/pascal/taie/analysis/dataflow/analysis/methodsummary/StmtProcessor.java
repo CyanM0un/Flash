@@ -493,6 +493,7 @@ public class StmtProcessor {
     private boolean isIgnored(JMethod method) {
         return method == null ||
                 method.isIgnored() ||
+                method.getDeclaringClass().isMethodIgnored() ||
                 (method.getDeclaringClass().getName().equals("java.lang.String")
                         && isIgnored(method.getReturnType())
                         && method.getSummaryMap().isEmpty()
