@@ -191,10 +191,11 @@ public class StmtProcessor {
         public Void visit(AssignLiteral stmt) {
             Literal literal = stmt.getRValue();
             Type type = literal.getType();
+            CSVar to = csManager.getCSVar(context, stmt.getLValue());
+            to.setLiteral();
             if (type instanceof ClassType) {
                 // here we only generate objects of ClassType
                 Obj obj = heapModel.getConstantObj((ReferenceLiteral) literal);
-                CSVar to = csManager.getCSVar(context, stmt.getLValue());
                 addPFGEdge(csManager.getCSObj(context, obj), to, FlowKind.NEW, lineNumber);
             }
             return null;
@@ -1051,8 +1052,9 @@ public class StmtProcessor {
     private Collection<? extends JMethod> filterCHA(Set<JMethod> methods, Contr baseContr, Type refType) {
         Type type = baseContr.getType();
         boolean ignoredType = !typeSystem.isSubtype(refType, type); // 消除iterator的transfer副作用
+        boolean isConstruct = baseContr.isSerializable() && baseContr.getOrigin() instanceof CSVar var && var.isLiteral();
         return methods.stream()
-                .filter(method -> isFilterNonSerializable ? method.getDeclaringClass().isSerializable() : true)
+                .filter(method -> isFilterNonSerializable ? (method.getDeclaringClass().isSerializable() ? true : isConstruct) : true)
                 .filter(method -> ignoredType || typeSystem.isSubtype(type, method.getDeclaringClass().getType()))
                 .filter(method -> !method.isPrivate())
                 .collect(Collectors.toSet());
