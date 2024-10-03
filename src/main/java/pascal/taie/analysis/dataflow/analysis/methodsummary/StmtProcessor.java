@@ -192,7 +192,7 @@ public class StmtProcessor {
             Literal literal = stmt.getRValue();
             Type type = literal.getType();
             CSVar to = csManager.getCSVar(context, stmt.getLValue());
-            to.setLiteral();
+            to.setAssigned();
             if (type instanceof ClassType) {
                 // here we only generate objects of ClassType
                 Obj obj = heapModel.getConstantObj((ReferenceLiteral) literal);
@@ -418,6 +418,7 @@ public class StmtProcessor {
                         if (ContrUtil.isCallSite(retValue)) { // 返回值来源于参数
                             Contr fromContr = getCallSiteCorrespondContr(retValue, callSiteVars);
                             retContr.updateValue(fromContr.getValue());
+                            csRet.setAssigned();
                             if (fromContr.getOrigin() instanceof ArrayIndex a) { // 忘了哪个例子了
                                 addPFGEdge(a.getArrayVar(), retContr.getOrigin(), FlowKind.SUMMARY_ASSIGN, lineNumber);
                             }
@@ -1053,7 +1054,7 @@ public class StmtProcessor {
     private Collection<? extends JMethod> filterCHA(Set<JMethod> methods, Contr baseContr, Type refType) {
         Type type = baseContr.getType();
         boolean ignoredType = !typeSystem.isSubtype(refType, type); // 消除iterator的transfer副作用
-        boolean isConstruct = baseContr.isSerializable() && baseContr.getOrigin() instanceof CSVar var && var.isLiteral();
+        boolean isConstruct = baseContr.isSerializable() && ContrUtil.isControllable(baseContr) && baseContr.getOrigin() instanceof CSVar var && var.isAssigned();
         return methods.stream()
                 .filter(method -> isFilterNonSerializable ? (method.getDeclaringClass().isSerializable() ? true : isConstruct) : true)
                 .filter(method -> ignoredType || typeSystem.isSubtype(type, method.getDeclaringClass().getType()))
