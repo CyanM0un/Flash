@@ -380,6 +380,7 @@ public class StmtProcessor {
                 addWL(stmt, callee, callee.isInvoke() ? getDynamicProxyEdge(csContr) : csContr);
             }
             // 处理返回值以及对参数的影响
+            if (callees.size() == 0) return null;
             Var ret = stmt.getResult();
             CSVar csRet = null;
             Contr retContr = null;

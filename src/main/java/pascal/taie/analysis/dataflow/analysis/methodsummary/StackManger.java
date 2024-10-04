@@ -459,10 +459,14 @@ public class StackManger {
 
     private List<Integer> getNewTCList(List<Integer> tcList, List<Integer> csIntContr) {
         List<Integer> tempTC = new ArrayList<>();
-        for (int i = 0; i < tcList.size(); i++) {
-            Integer tc = tcList.get(i);
-            Integer newTC = tc > ContrUtil.iPOLLUTED ? csIntContr.get(tc + 1) : ContrUtil.iPOLLUTED;
-            if (!tempTC.contains(newTC)) tempTC.add(newTC);
+        try {
+            for (int i = 0; i < tcList.size(); i++) {
+                Integer tc = tcList.get(i);
+                Integer newTC = tc > ContrUtil.iPOLLUTED ? csIntContr.get(tc + 1) : ContrUtil.iPOLLUTED;
+                if (!tempTC.contains(newTC)) tempTC.add(newTC);
+            }
+        } catch (Exception e) {
+            tempTC.add(ContrUtil.iNOT_POLLUTED);
         }
         return tempTC;
     }
