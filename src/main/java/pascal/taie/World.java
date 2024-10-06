@@ -242,7 +242,7 @@ public final class World extends AbstractResultHolder
                 .flatMap(j -> j.getDeclaredMethods().stream());
     }
 
-    public Set<JMethod> filterMethods(String name, String clzName, List<Type> argTypes, boolean recSer, boolean paramSer) {
+    public Set<JMethod> filterMethods(String name, String clzName, List<Type> argTypes, boolean recSer, boolean paramSer, Type expandArgType) { // TODO 以下两个方法可以优化合并
         boolean hasStar = clzName.contains("*");
         Pattern pattern = hasStar ? Pattern.compile(clzName) : null;
         Type clsType = null;
@@ -259,7 +259,7 @@ public final class World extends AbstractResultHolder
                         && !m.isPrivate()
                         && (recSer || m.getDeclaringClass().isSerializable())
                         && (!paramSer || m.getIR().getParams().stream().allMatch(p -> ContrUtil.isSerializableType(p.getType()))))
-                .filter(m -> typeSystem.allSubType(null, argTypes, m.getIR().getParams().stream()
+                .filter(m -> typeSystem.allSubType(expandArgType, argTypes, m.getIR().getParams().stream()
                         .map(Var::getType)
                         .collect(Collectors.toList())))
                 .collect(Collectors.toSet());

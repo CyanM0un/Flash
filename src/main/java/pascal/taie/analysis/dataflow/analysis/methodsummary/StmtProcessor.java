@@ -878,16 +878,18 @@ public class StmtProcessor {
                     }
                     String clzName;
                     Set<JMethod> callees;
+                    Type expandArgType = null;
                     if (fromContr.getType().getName().equals("java.lang.String")) { // Class#forName
                         clzName = ContrUtil.convert2Reg(fromContr.getValue());
-                        callees = World.get().filterMethods("<clinit>", clzName, new ArrayList<>(), ContrUtil.isControllableParam(fromContr), isFilterNonSerializable);
+                        callees = World.get().filterMethods("<clinit>", clzName, new ArrayList<>(), ContrUtil.isControllableParam(fromContr), isFilterNonSerializable, expandArgType);
                     } else {
                         Contr paramContr = getContr(callSiteVars.get(1));
                         ArrayList<Contr> argContrs = paramContr != null ? paramContr.getArrayElements() : new ArrayList<>();
+                        if (argContrs.isEmpty() && ContrUtil.isControllable(paramContr)) expandArgType = getContrType(paramContr);
                         List<Type> argTypes = argContrs.stream().map(Contr::getType).toList();
                         clzName = fromContr.getOrigin().getType().getName();
                         if (clzName.equals("java.lang.Class")) clzName = "java.lang.Object";
-                        callees = World.get().filterMethods("<init>", clzName, argTypes, ContrUtil.isControllableParam(fromContr), isFilterNonSerializable);
+                        callees = World.get().filterMethods("<init>", clzName, argTypes, ContrUtil.isControllableParam(fromContr), isFilterNonSerializable, expandArgType);
                     }
                     if (callees.size() > 1) logger.info("[+] {} possible init target in {}", callees.size(), curMethod);
                     for (JMethod init : callees) {
